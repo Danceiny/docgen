@@ -4,6 +4,9 @@ on:
   push:
     tags:
       - 'v*'
+  # A dry run from the Actions tab: tests, builds and packs every platform and keeps
+  # the packages as artifacts of the run, and publishes nothing.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -73,6 +76,7 @@ jobs:
 
   release:
     needs: build
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
