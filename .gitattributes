@@ -1,0 +1,4 @@
+# Documents, golden files and sources are compared byte for byte by the tests and by
+# docgen -check; a checkout must not turn their line feeds into carriage returns and
+# line feeds.
+* text=auto eol=lf

@@ -10,17 +10,26 @@ permissions:
 
 jobs:
   test:
-    name: test (${{ matrix.os }})
+    name: test (${{ matrix.os }}, go ${{ matrix.go || 'of go.mod' }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          # The Go that go.mod asks for, on the systems the releases are built for.
+          - {os: ubuntu-latest}
+          - {os: macos-latest}
+          - {os: windows-latest}
+          # And the newest Go, which is what most users have.
+          - {os: ubuntu-latest, go: stable}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
+          # go-version, when it is not empty, wins over the file.
+          go-version: ${{ matrix.go }}
           go-version-file: go.mod
+          check-latest: ${{ matrix.go == 'stable' }}
       - name: Vet
         run: go vet ./...
       - name: Test
@@ -28,6 +37,7 @@ jobs:
       - name: The checked-in example documents are current
         run: go run ./cmd/docgen -C examples/petstore -check
       - name: go.mod and go.sum are tidy
+        if: matrix.go == ''
         run: go mod tidy -diff
 
   lint:

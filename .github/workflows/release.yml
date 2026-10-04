@@ -16,7 +16,8 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version: stable
+          check-latest: true
       - run: go test ./... -count=1
 
   build:
@@ -32,9 +33,12 @@ jobs:
           - {os: windows, arch: amd64}
     steps:
       - uses: actions/checkout@v7
+      # go.mod names the oldest Go that builds docgen, 1.25.0; a release is built
+      # with the newest Go, which has the fixes of the standard library.
       - uses: actions/setup-go@v7
         with:
-          go-version-file: go.mod
+          go-version: stable
+          check-latest: true
 
       # Since Go 1.24 the version of the main module, which `docgen -version`
       # prints, is taken from the tag the binary is built at, with "+dirty"

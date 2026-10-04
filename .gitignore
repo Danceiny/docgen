@@ -1,5 +1,6 @@
-# a binary built in the repository root
+# a binary built in the repository root or in cmd/docgen
 /docgen
+/cmd/docgen/docgen
 /dist/
 
 # profiles written by -cpuprofile and -memprofile

@@ -25,10 +25,12 @@ modules below; each is used under the license shown, whose text follows. The tes
 
 ## Code adapted from the Go standard library
 
-Three functions are adapted from the Go standard library, which is distributed under the
+Some functions are adapted from the Go standard library, which is distributed under the
 BSD-3-Clause license of The Go Authors (the same text as the `golang.org/x` modules below):
 
-- `extractCommentGroupText` in `internal/engine/comment.go`, from `CommentGroup.Text` of `go/ast`;
+- `extractCommentGroupText` in `internal/engine/comment.go`, from `CommentGroup.Text` of `go/ast`,
+  with `isDirective` and `stripTrailingWhitespace`, which that function uses and which are copied
+  from `go/ast` and `go/printer` as well;
 - `titleWords` and `isWordSeparator` in `internal/engine/api_builder.go`, from `strings.Title`.
 
 ## License texts
