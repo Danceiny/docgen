@@ -26,7 +26,8 @@ func updateDescriptionForce(ref *openapi3.SchemaRef, doc, comment *ast.CommentGr
 func updateDescription(ref *openapi3.SchemaRef, doc, comment *ast.CommentGroup) *openapi3.SchemaRef {
 	schemaCopy := *ref.Value
 	desc := extractDescription(doc, comment)
-	isBasic := isBasicType((*schemaCopy.Type)[0])
+	// the schema of any has no type
+	isBasic := schemaCopy.Type != nil && len(*schemaCopy.Type) > 0 && isBasicType((*schemaCopy.Type)[0])
 
 	switch {
 	case desc != "" && isBasic:

@@ -64,6 +64,16 @@ func TestFieldShapesAreReadAsEncodingJSONReadsThem(t *testing.T) {
 	}
 	assert.Nil(t, anything["list"].Value.Items.Value.Type, "the items of a list of any are any value")
 
+	// A type declared as any is any value too, and is no reason to stop.
+	for _, name := range []string{"Payload", "Alias", "Raw"} {
+		if schema := doc.Components.Schemas[fieldShapesKey+name]; schema != nil {
+			assert.Nil(t, schema.Value.Type, "%s takes any JSON value", name)
+		}
+	}
+	holders := doc.Components.Schemas[fieldShapesKey+"Holders"].Value.Properties
+	assert.Equal(t, "P is a payload.", holders["p"].Value.Description, "the comment of a field of the type is its description")
+	assert.Len(t, holders, 4)
+
 	collections := doc.Components.Schemas[fieldShapesKey+"Collections"].Value.Properties
 	tags := collections["tags"].Value.AdditionalProperties
 	require.NotNil(t, tags.Schema, "the values of a map have their schema")

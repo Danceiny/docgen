@@ -64,3 +64,22 @@ type Collections struct {
 	Hash   [4]byte           `json:"hash"`
 	One    byte              `json:"one"`
 }
+
+// Payload is any value.
+type Payload any
+
+// Alias is another name of any.
+type Alias = any
+
+// Raw is the empty interface.
+type Raw interface{}
+
+// Holders have fields of the types above.
+type Holders struct {
+	// P is a payload.
+	P Payload `json:"p"`
+	A Alias   `json:"a"`
+	R Raw     `json:"r"`
+	// Ps are payloads.
+	Ps []Payload `json:"ps"`
+}
