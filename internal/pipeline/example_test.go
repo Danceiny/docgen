@@ -113,6 +113,13 @@ func TestPetstoreInternalDocumentShowsEverything(t *testing.T) {
 	if doc.Components.Schemas["example.com.petstore.pet.domain.InternalAuditEntry"] == nil {
 		t.Error("a type named Internal* is shown in the internal document")
 	}
+	if attributes := pet.Properties["attributes"]; attributes == nil || attributes.Value.AdditionalProperties.Schema == nil ||
+		!attributes.Value.AdditionalProperties.Schema.Value.Type.Is("string") {
+		t.Error("a map has the type of its values")
+	}
+	if size := doc.Components.Schemas["example.com.petstore.pet.domain.Size"]; size == nil || len(size.Value.Enum) != 3 || size.Value.Enum[2] != float64(2) {
+		t.Errorf("an enum declared with iota has its values, got %+v", size)
+	}
 	if doc.Components.Schemas["example.com.petstore.errors.NotFoundErr"] == nil {
 		t.Error("the errors of errors.json are components")
 	}

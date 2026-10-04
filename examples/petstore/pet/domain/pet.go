@@ -23,6 +23,19 @@ const (
 	StatusLegacyQuarantine Status = "quarantine"
 )
 
+// Size is how big a pet grows. The values are what iota counts, and the document
+// has them.
+type Size int
+
+const (
+	// SizeSmall means up to 10 kg.
+	SizeSmall Size = iota
+	// SizeMedium means up to 25 kg.
+	SizeMedium
+	// SizeLarge means more than that.
+	SizeLarge
+)
+
 // Category groups pets: dogs, cats, birds.
 type Category struct {
 	ID   int64  `json:"id" example:"7"`
@@ -45,8 +58,11 @@ type Pet struct {
 	Status   Status   `json:"status"`
 	Category Category `json:"category"`
 	// Tags are free words that help to find the pet.
-	Tags   []string  `json:"tags,omitempty"`
-	BornAt time.Time `json:"bornAt"`
+	Tags []string `json:"tags,omitempty"`
+	// Attributes are free-form labels, such as the colour; the values are text.
+	Attributes map[string]string `json:"attributes,omitempty"`
+	Size       Size              `json:"size"`
+	BornAt     time.Time         `json:"bornAt"`
 	// Fee is the adoption fee.
 	Fee Price `json:"fee"`
 	// Notes are written by the staff and never shown to customers.

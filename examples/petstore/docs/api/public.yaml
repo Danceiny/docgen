@@ -21,6 +21,11 @@ components:
             type: object
         example.com.petstore.pet.domain.Pet:
             properties:
+                attributes:
+                    additionalProperties:
+                        type: string
+                    description: Attributes are free-form labels, such as the colour; the values are text.
+                    type: object
                 bornAt:
                     example: "2024-01-02T15:04:05Z"
                     format: date-time
@@ -56,6 +61,13 @@ components:
                     description: Name is what the pet is called.
                     example: Rex
                     type: string
+                size:
+                    enum:
+                        - 0
+                        - 1
+                        - 2
+                    title: Size
+                    type: integer
                 status:
                     enum:
                         - available
@@ -100,6 +112,11 @@ components:
                 pets:
                     items:
                         properties:
+                            attributes:
+                                additionalProperties:
+                                    type: string
+                                description: Attributes are free-form labels, such as the colour; the values are text.
+                                type: object
                             bornAt:
                                 example: "2024-01-02T15:04:05Z"
                                 format: date-time
@@ -135,6 +152,13 @@ components:
                                 description: Name is what the pet is called.
                                 example: Rex
                                 type: string
+                            size:
+                                enum:
+                                    - 0
+                                    - 1
+                                    - 2
+                                title: Size
+                                type: integer
                             status:
                                 enum:
                                     - available

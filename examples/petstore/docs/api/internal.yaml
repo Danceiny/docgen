@@ -62,6 +62,11 @@ components:
             type: object
         example.com.petstore.pet.domain.Pet:
             properties:
+                attributes:
+                    additionalProperties:
+                        type: string
+                    description: Attributes are free-form labels, such as the colour; the values are text.
+                    type: object
                 bornAt:
                     example: "2024-01-02T15:04:05Z"
                     format: date-time
@@ -81,6 +86,8 @@ components:
                 notes:
                     description: Notes are written by the staff and never shown to customers.
                     type: string
+                size:
+                    $ref: '#/components/schemas/example.com.petstore.pet.domain.Size'
                 status:
                     $ref: '#/components/schemas/example.com.petstore.pet.domain.Status'
                 tags:
@@ -101,6 +108,14 @@ components:
             example: "12.50"
             title: example.com.petstore.pet.domain.Price
             type: string
+        example.com.petstore.pet.domain.Size:
+            description: "Enums \n- `SizeSmall` (`0`): means up to 10 kg.\n- `SizeMedium` (`1`): means up to 25 kg.\n- `SizeLarge` (`2`): means more than that.\n"
+            enum:
+                - 0
+                - 1
+                - 2
+            title: example.com.petstore.pet.domain.Size
+            type: integer
         example.com.petstore.pet.domain.Status:
             description: "Enums \n- `StatusAvailable` (`available`): means the pet can be adopted.\n- `StatusReserved` (`reserved`): means the pet is held for a customer.\n- `StatusAdopted` (`adopted`): means the pet has a home.\n"
             enum:
