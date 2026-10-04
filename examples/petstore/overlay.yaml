@@ -1,0 +1,15 @@
+# Schemas docgen cannot discover from the Go types. ImportReq lives in the
+# service package, outside the packages whose types become schemas.
+version: 1
+schemas:
+  example.com.petstore.pet.service.ImportReq:
+    type: object
+    required: [source, pets]
+    properties:
+      source:
+        type: string
+        description: Where the pets come from, such as the name of a shelter.
+      pets:
+        type: array
+        items:
+          $ref: '#/components/schemas/example.com.petstore.pet.domain.Pet'

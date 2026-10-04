@@ -1,0 +1,84 @@
+# docgen configuration of the petstore example.
+# Run it with:  docgen -C examples/petstore            (writes docs/api/*.yaml)
+#               docgen -C examples/petstore -check     (fails if they are stale)
+version: 1
+
+# Every route starts with /api; this is the default.
+api:
+  prefix: /api
+
+# Types whose wire form is not what their Go declaration says: a Price is an
+# int64 in Go and a string on the wire.
+type_map:
+  example.com.petstore.pet.domain.Price:
+    type: string
+    example: "12.50"
+
+# The header type each operation takes as its "Headers" parameter. The two GET
+# operations have none: a request read from the query string is anonymous.
+headers:
+  default: Auth
+  types:
+    Auth: example.com.petstore.pet.protocol.AuthHeader
+
+# Requests that are not a plain JSON body.
+request:
+  multipart:
+    example.com.petstore.pet.protocol.UploadPhotoReq:
+      - {name: file, kind: file, required: true}
+      - {name: caption, kind: scalar, scalar_to: string}
+  query:
+    example.com.petstore.pet.protocol.ListPetsReq:
+      - {name: status, description: Limit the list to pets in this state}
+      - {name: pageSize, type: integer, description: How many pets a page has}
+      - {name: cursor, description: The next of the previous page}
+    example.com.petstore.pet.protocol.DownloadPhotoReq:
+      - {name: petId, required: true, description: The pet whose photo is wanted}
+
+response:
+  # Every operation can answer 401; the documents say so once, here.
+  default_statuses:
+    "401": Unauthorized
+  # A response that is a file, not JSON.
+  binary:
+    example.com.petstore.pet.protocol.DownloadPhotoResp:
+      description: The photo
+      content_types: [image/png, image/jpeg]
+      errors:
+        "404": The pet has no photo
+
+# The errors an annotation such as @response:404,NotFoundErr can name.
+errors:
+  file: errors.json
+  component_prefix: example.com.petstore.errors.
+
+docs:
+  # Everything, for the people who build and run the service.
+  - name: internal
+    audience: internal
+    output: docs/api/internal.yaml
+    info:
+      title: Petstore internal API
+      version: 1.0.0
+      description: Every operation of the petstore service.
+    servers:
+      - {url: "http://localhost:8080", description: Local}
+    models: ["*/domain", "*/protocol"]
+    services: ["*/service"]
+    overlay:
+      - {file: overlay.yaml, stage: after_models}
+
+  # What customers may see: the operations tagged "public", the schemas they use.
+  - name: public
+    audience: public
+    output: docs/api/public.yaml
+    info:
+      title: Petstore API
+      version: 1.0.0
+    servers:
+      - {url: "https://api.example.com", description: Production}
+    models: ["*/domain", "*/protocol"]
+    services: ["*/service"]
+    hide_type_prefixes: [Internal]
+    public:
+      tag: public

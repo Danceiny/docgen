@@ -1,0 +1,245 @@
+package engine
+
+import (
+	"container/list"
+	"fmt"
+	"go/ast"
+	"go/token"
+	"strings"
+	"sync"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"golang.org/x/tools/go/packages"
+)
+
+var (
+	pkgCache     sync.Map // importPath -> *packages.Package
+	pkgLoadError sync.Map // importPath -> struct{}; fail once per process
+	typeKeyCache sync.Map // ast.Expr -> type key
+	keyTypeCache sync.Map // type key -> ast.Expr
+)
+
+type TypeParser struct {
+	doc      *openapi3.T
+	pkg      *packages.Package
+	session  *GenerationSession
+	audience Audience
+
+	schemaMu    sync.RWMutex // protects the writes to doc
+	defers      *list.List
+	mergeTasks  *list.List
+	activeTypes map[string]bool
+	activeMu    sync.Mutex
+}
+
+type MergeTask struct {
+	TargetKey string
+	SourceKey string
+}
+
+func NewTypeParser(pkg *packages.Package, doc *openapi3.T, sessions ...*GenerationSession) *TypeParser {
+	var session *GenerationSession
+	var audience Audience
+	if len(sessions) > 0 && sessions[0] != nil {
+		session = sessions[0]
+		audience = session.audience
+	}
+	return &TypeParser{
+		doc:         doc,
+		pkg:         pkg,
+		session:     session,
+		audience:    audience,
+		defers:      list.New(),
+		mergeTasks:  list.New(),
+		activeTypes: make(map[string]bool),
+	}
+}
+
+// ParseAllDecls parses all type declarations of the package.
+func (p *TypeParser) ParseAllDecls() {
+	for _, file := range p.pkg.Syntax {
+		pkgAliases := parseFileImports(file)
+
+		for _, decl := range file.Decls {
+			// type declarations (such as type User struct)
+			if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
+				for _, spec := range genDecl.Specs {
+					if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+						ctx := &ParseContext{
+							importAlias: pkgAliases,
+							Doc:         genDecl.Doc,
+							Comment:     typeSpec.Comment,
+						}
+						p.parseTypeSpec(typeSpec, ctx) // parse the type declaration
+					}
+				}
+			}
+		}
+	}
+}
+
+// parseTypeSpec handles a type declaration (such as type User struct).
+func (p *TypeParser) parseTypeSpec(typeSpec *ast.TypeSpec, ctx *ParseContext) {
+	typeName := typeSpec.Name.Name
+
+	fk := p.generateStructKey(typeName)
+	if v := p.getRealSchemaFromDoc(fk); v != nil {
+		p.updateSchemaInDocForce(fk, updateDescriptionForce(v, ctx.Doc, ctx.Comment))
+	} else {
+		p.occupySchema(fk) // placeholder
+		p.parseTypeSpecOccupied(typeSpec, ctx, fk)
+	}
+}
+
+func (p *TypeParser) parseTypeSpecOccupied(typeSpec *ast.TypeSpec, ctx *ParseContext, fullKey string) {
+	p.activeMu.Lock()
+	if p.activeTypes[fullKey] {
+		p.activeMu.Unlock()
+		return
+	}
+	p.activeTypes[fullKey] = true
+	p.activeMu.Unlock()
+	defer func() {
+		p.activeMu.Lock()
+		delete(p.activeTypes, fullKey)
+		p.activeMu.Unlock()
+	}()
+	var (
+		schema *openapi3.SchemaRef
+		// the expression of the underlying type (such as "string" or "int")
+		underlyingType = "default"
+	)
+	if typeSpec.TypeParams != nil {
+		gt := typeSpec.TypeParams.List[0].Type // only the first type parameter is supported for now
+		ctx.GenericValue = gt
+	}
+	if typeSpec.Doc != nil {
+		ctx.Doc = typeSpec.Doc
+	}
+	ctx.FullKey = fullKey
+	// Go alias declarations (`type Alias = Target`) must resolve the target
+	// schema without treating the alias component as the target's recursion
+	// key. Preserve the alias component identity while copying the resolved
+	// target shape.
+	if typeSpec.Assign.IsValid() {
+		aliasCtx := *ctx
+		aliasCtx.FullKey = ""
+		schema = p.parse(typeSpec.Type, &aliasCtx)
+		underlyingType = "alias"
+		if ident, ok := typeSpec.Type.(*ast.Ident); ok {
+			underlyingType = ident.Name
+		}
+		p.handleSchema(typeSpec, fullKey, schema, underlyingType)
+		return
+	}
+	switch t := typeSpec.Type.(type) {
+	case *ast.StructType:
+		underlyingType = "StructType"
+		schema = p.parseStruct(t, ctx)
+	case *ast.Ident:
+		// type definitions (such as type T string)
+		underlyingType = t.Name
+		schema = p.parse(t, ctx)
+	case *ast.SelectorExpr:
+		// external types (such as time.Time)
+		underlyingType = fmt.Sprintf("%s.%s", t.X, t.Sel.Name)
+		schema = p.parse(t, ctx)
+	default:
+		schema = p.parse(t, ctx)
+	}
+
+	p.handleSchema(typeSpec, fullKey, schema, underlyingType)
+}
+
+// parse is the core of parsing, without locks.
+func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.SchemaRef) {
+	if expr == nil {
+		// A field of a type parameter that no type argument was given for (a
+		// generic declaration that nothing instantiates), or of a type that is
+		// named T, which is read as a type parameter: there is nothing to describe.
+		if ctx != nil && ctx.Field != nil {
+			Logger().Debug("field of a type parameter has no type argument and is left out", "at", p.at(ctx.Field))
+		}
+		return nil
+	}
+	// the actual parsing (no locks here)
+	fk := ctx.FullKey
+	if fk == "" {
+		fk = p.generateTypeKey(expr)
+	}
+	if ctx.GenericValue != nil {
+		fk = getGenericFullKey(fk, ctx.GenericValue)
+		ctx.FullKey = fk
+	}
+	defer func() {
+		if schema != nil && schema.Value != nil && ctx != nil {
+			// nullability only matters in the context of a field
+			schema.Value.Nullable = isNullableFromField(ctx.Field)
+			schema.Value.Description = extractDescription(ctx.Doc, ctx.Comment)
+		}
+		// nil has to be allowed to update here too!
+		// only some types need their schema written
+		if strings.HasPrefix(fk, ownKeyPrefix()) {
+			p.updateSchemaInDoc(fk, schema)
+		} else {
+			p.deleteSchema(fk)
+		}
+		if schema == nil {
+			p.deleteSchema(fk)
+		}
+	}()
+
+	if cached := p.getRealSchemaFromDoc(fk); cached != nil {
+		// updateDescription cannot be used here: it would pollute the comments of the structure
+		v := CopyRef(cached)
+		return v
+	}
+
+	vs := strings.Split(fk, ".")
+	last := vs[len(vs)-1]
+
+	// should it be hidden? (this includes the compatibility check for the Internal prefix)
+	if shouldHideByDefault(last, p.audience) {
+		return nil
+	}
+
+	if v := getBasicTypeSchema(last); v != nil {
+		return CopyRef(v.NewRef())
+	} else if v := getBasicTypeSchema(fk); v != nil {
+		return CopyRef(v.NewRef())
+	}
+
+	p.occupySchema(fk)
+	switch t := expr.(type) {
+	case *ast.Ident:
+		schema = p.parseIdent(t, ctx)
+	case *ast.IndexExpr:
+		fk, schema = p.parseIndexExpr(fk, t, ctx)
+	case *ast.IndexListExpr:
+		Logger().Warn("generic type with several type arguments is not supported", "key", fk, "at", p.at(t))
+	case *ast.StarExpr:
+		schema = p.parsePointer(t, ctx)
+	case *ast.ArrayType:
+		ctx.FullKey = ""
+		schema = p.parseArray(t, ctx)
+	case *ast.StructType:
+		ctx.FullKey = ""
+		schema = p.parseStruct(t, ctx)
+	case *ast.SelectorExpr:
+		schema = p.parseSelector(t, ctx)
+	case *ast.MapType:
+		ctx.FullKey = ""
+		schema = p.parseMap(t, ctx)
+	case *ast.InterfaceType:
+		ctx.FullKey = ""
+		schema = p.parseInterface(t, ctx)
+	case *ast.FuncType, *ast.ChanType:
+		// No schema describes a function or a channel.
+		return nil
+	default:
+		Logger().Warn("type expression has no rule", "key", fk, "expr", goType(t), "at", p.at(t))
+		return nil
+	}
+	// copyRef cannot be used here
+	return schema
+}

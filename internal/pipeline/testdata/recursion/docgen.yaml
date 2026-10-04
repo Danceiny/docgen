@@ -1,0 +1,16 @@
+# A module of types that contain themselves, and a package nothing imports.
+version: 1
+docs:
+  - name: internal
+    audience: internal
+    output: out/internal.yaml
+    info: {title: Recursion, version: 0.0.1}
+    models: ["tree", "lonely"]
+    services: ["service"]
+  - name: public
+    audience: public
+    output: out/public.yaml
+    info: {title: Recursion, version: 0.0.1}
+    models: ["tree", "lonely"]
+    services: ["service"]
+    public: {tag: public}

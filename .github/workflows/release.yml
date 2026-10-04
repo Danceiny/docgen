@@ -1,0 +1,86 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # The tests are what a release is made of: do not publish what fails them.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./... -count=1
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - {os: linux, arch: amd64}
+          - {os: linux, arch: arm64}
+          - {os: darwin, arch: amd64}
+          - {os: darwin, arch: arm64}
+          - {os: windows, arch: amd64}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Since Go 1.24 the version of the main module, which `docgen -version`
+      # prints, is taken from the tag the binary is built at, with "+dirty"
+      # added when the working tree has changes: there must be none.
+      - name: The working tree is clean
+        run: test -z "$(git status --porcelain)" || { git status; exit 1; }
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: "0"
+        run: |
+          name="docgen_${{ github.ref_name }}_${{ matrix.os }}_${{ matrix.arch }}"
+          mkdir -p "dist/$name"
+          binary=docgen
+          if [ "${{ matrix.os }}" = "windows" ]; then binary=docgen.exe; fi
+          go build -trimpath -ldflags "-s -w" -o "dist/$name/$binary" ./cmd/docgen
+          cp LICENSE README.md THIRD_PARTY_NOTICES.md "dist/$name/"
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            (cd dist && zip -qr "$name.zip" "$name")
+          else
+            tar -C dist -czf "dist/$name.tar.gz" "$name"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docgen-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: artifacts
+        run: sha256sum docgen_* > SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
