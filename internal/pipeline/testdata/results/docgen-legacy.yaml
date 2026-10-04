@@ -1,0 +1,12 @@
+# The same module read as documents generated before lists, maps and generic types
+# were described have always read it.
+version: 1
+compat:
+  legacy_operation_types: true
+docs:
+  - name: plain
+    audience: internal
+    output: out/legacy.yaml
+    info: {title: Results, version: 0.0.1}
+    models: ["m"]
+    services: ["s"]

@@ -1,0 +1,16 @@
+version: 1
+docs:
+  - name: internal
+    audience: internal
+    output: out/internal.yaml
+    info: {title: Hiding, version: 0.0.1}
+    models: ["domain"]
+    services: ["service"]
+  - name: public
+    audience: public
+    output: out/public.yaml
+    info: {title: Hiding, version: 0.0.1}
+    models: ["domain"]
+    services: ["service"]
+    hide_type_prefixes: [Internal]
+    public: {tag: public}

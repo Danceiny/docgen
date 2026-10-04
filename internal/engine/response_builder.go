@@ -156,6 +156,7 @@ var BasicTypeSchemas = map[string]*openapi3.Schema{
 	"float64":                  openapi3.NewFloat64Schema(),
 	"map.string.interface{}":   openapi3.NewObjectSchema(),
 	"any":                      openapi3.NewObjectSchema(),
+	"time.Duration":            openapi3.NewInt64Schema(), // the JSON of a Duration is its number of nanoseconds
 	"time.Time":                dateTimeSchema(),
 	"time":                     dateTimeSchema(),
 	"error":                    WithDescription(openapi3.NewStringSchema(), `error`),
@@ -195,7 +196,7 @@ func buildSuccessDataSchema(spec ResponseSpec, doc *openapi3.T) *openapi3.Schema
 
 	env := settings.Envelope
 	if env == nil {
-		return unwrappedDataSchema(v, schema)
+		return inLists(unwrappedDataSchema(v, schema), spec.DataType.Dimensions)
 	}
 
 	schemaRef := openapi3.NewObjectSchema().
@@ -210,9 +211,10 @@ func buildSuccessDataSchema(spec ResponseSpec, doc *openapi3.T) *openapi3.Schema
 
 	// is it a basic type?
 	if baseSchema := getBasicTypeSchema(v); baseSchema != nil {
-		schemaRef.WithProperty(env.Data, baseSchema)
+		schemaRef.WithPropertyRef(env.Data, inLists(&openapi3.SchemaRef{Value: baseSchema}, spec.DataType.Dimensions))
 	} else if schema != nil {
-		schemaRef.WithPropertyRef(env.Data, NewSchemaRefFromFullKey(v)) // a reference rather than the schema, to save space
+		// a reference rather than the schema, to save space
+		schemaRef.WithPropertyRef(env.Data, inLists(NewSchemaRefFromFullKey(v), spec.DataType.Dimensions))
 	}
 
 	if settings.VendorExtensions {
@@ -232,6 +234,18 @@ func buildSuccessDataSchema(spec ResponseSpec, doc *openapi3.T) *openapi3.Schema
 		schemaRef.Extensions = extensions
 	}
 	return schemaRef.NewRef()
+}
+
+// inLists wraps a schema in as many lists as a type has dimensions: a result of
+// []Product is a list of Products. A nil schema stays nil.
+func inLists(schema *openapi3.SchemaRef, dimensions int) *openapi3.SchemaRef {
+	if schema == nil || settings.CompatLegacyOperationTypes {
+		return schema
+	}
+	for i := 0; i < dimensions; i++ {
+		schema = &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{openapi3.TypeArray}, Items: schema}}
+	}
+	return schema
 }
 
 // unwrappedDataSchema is the body of a response that has no envelope: the data

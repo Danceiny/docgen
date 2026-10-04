@@ -23,6 +23,6 @@ type Basics struct {
 	Float64    float64       `json:"float64"`
 	Complex64  complex64     `json:"complex64"`
 	Complex128 complex128    `json:"complex128"`
-	Timeout    time.Duration `json:"timeout"`
+	Timeout    time.Duration `json:"timeout" default:"5s" example:"10m"`
 	Created    time.Time     `json:"created"`
 }

@@ -124,6 +124,11 @@ func inferReflectTypeFromAST(expr ast.Expr) reflect.Type {
 			// for a custom type, interface{}
 			return reflect.TypeOf((*interface{})(nil)).Elem()
 		}
+	case *ast.SelectorExpr:
+		// time.Duration: its example and default are written as durations, 10m
+		if pkg, ok := t.X.(*ast.Ident); ok && pkg.Name == "time" && t.Sel.Name == "Duration" {
+			return reflect.TypeOf(time.Duration(0))
+		}
 	case *ast.StarExpr:
 		// a pointer type: the base type, recursively
 		baseType := inferReflectTypeFromAST(t.X)

@@ -489,8 +489,8 @@ func getJSONDefaultValue(field *ast.Field) (string, bool) {
 	tag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
 	splits := strings.Split(tag.Get("json"), ",")
 	for i := 1; i < len(splits); i++ {
-		if strings.HasPrefix(splits[i], "default") {
-			return splits[i][len("default")+1:], true
+		if value, ok := strings.CutPrefix(splits[i], "default="); ok {
+			return value, true
 		}
 	}
 	return "", false

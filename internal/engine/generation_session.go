@@ -19,6 +19,7 @@ type GenerationSession struct {
 	packages  []*packages.Package
 	imports   map[string]*packages.Package
 	resolving map[string]bool
+	hidden    map[string]bool // the keys of the types of the module that the document hides
 	audience  Audience
 	mu        sync.Mutex
 }
@@ -58,7 +59,7 @@ func NewGenerationSession(moduleDir string, opts ...SessionOption) (*GenerationS
 		return nil, err
 	}
 	sort.Slice(pkgs, func(i, j int) bool { return pkgs[i].ID < pkgs[j].ID })
-	s := &GenerationSession{moduleDir: abs, packages: pkgs, imports: make(map[string]*packages.Package), resolving: make(map[string]bool)}
+	s := &GenerationSession{moduleDir: abs, packages: pkgs, imports: make(map[string]*packages.Package), resolving: make(map[string]bool), hidden: make(map[string]bool)}
 	for _, pkg := range pkgs {
 		if pkg.Module != nil && pkg.Module.Main {
 			ModuleName = pkg.Module.Path
@@ -140,6 +141,37 @@ func (s *GenerationSession) EnterResolving(key string) bool {
 	}
 	s.resolving[key] = true
 	return true
+}
+
+// markHidden records that the document hides the type with the key.
+func (s *GenerationSession) markHidden(key string) {
+	s.mu.Lock()
+	s.hidden[key] = true
+	s.mu.Unlock()
+}
+
+// HiddenTypeOf returns the key of a type that the method takes or returns and
+// that the document hides, or "". An operation cannot be described without the
+// types it uses, so the pipeline leaves it out and says so.
+func (s *GenerationSession) HiddenTypeOf(m *Method) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.hidden) == 0 {
+		return ""
+	}
+	for _, p := range m.Params {
+		for _, t := range p.Types {
+			if t != nil && s.hidden[t.FullKey] {
+				return t.FullKey
+			}
+		}
+	}
+	for _, r := range m.Responses {
+		if r.DataType != nil && s.hidden[r.DataType.FullKey] {
+			return r.DataType.FullKey
+		}
+	}
+	return ""
 }
 
 func (s *GenerationSession) LeaveResolving(key string) {

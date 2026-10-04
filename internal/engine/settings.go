@@ -60,6 +60,10 @@ type Settings struct {
 	// x-apifox-orders, x-apifox-enum, x-apifox-folder, x-enum-varnames,
 	// x-enum-comments, x-display-name, x-primary-property and x-go-interface.
 	VendorExtensions bool
+	// CompatLegacyOperationTypes reads the types of the parameters and results of
+	// an operation as documents always read them: a list is its element type, and
+	// a map, an interface and an instantiated generic type are unknown.
+	CompatLegacyOperationTypes bool
 	// KeepEmptyTags keeps the empty tags an operation gets from a missing @tags
 	// or @permission; without it they are dropped.
 	KeepEmptyTags bool

@@ -23,6 +23,8 @@ func engineSettings(cfg *config.Config) engine.Settings {
 		DefaultStatuses:  cfg.Response.DefaultStatuses,
 		VendorExtensions: cfg.VendorExtensions,
 		KeepEmptyTags:    cfg.KeepEmptyTags,
+
+		CompatLegacyOperationTypes: cfg.Compat.LegacyOperationTypes,
 	}
 	if env := cfg.Response.Envelope; env != nil {
 		s.Envelope = &engine.Envelope{Code: env.Code, Message: env.Message, Data: env.Data}

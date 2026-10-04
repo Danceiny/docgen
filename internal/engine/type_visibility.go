@@ -1,0 +1,125 @@
+package engine
+
+import (
+	"go/ast"
+	"go/types"
+	"strings"
+
+	"golang.org/x/tools/go/packages"
+)
+
+// A type is hidden from a document by its //apidoc: directive or, when it has
+// none, by its name: the document hides the types whose names start with one of
+// its prefixes (hide_type_prefixes). Hiding a type leaves out the type, every
+// field and every operation that refers to it. An enum is the exception: it is
+// shown with its values hidden, as documents have always shown it.
+
+// typeDeclaration finds the declaration of a named type, with the package that
+// declares it: the package being parsed, or one the session loaded.
+func (p *TypeParser) typeDeclaration(named *types.Named) (*ast.TypeSpec, *ast.GenDecl, *packages.Package) {
+	obj := named.Obj()
+	if obj == nil || obj.Pkg() == nil {
+		return nil, nil, nil
+	}
+	pkg := p.pkg
+	if p.pkg == nil || obj.Pkg().Path() != p.pkg.PkgPath {
+		pkg = nil
+		if p.session != nil {
+			pkg = p.session.ImportedPackage(obj.Pkg().Path())
+		}
+	}
+	if pkg == nil {
+		return nil, nil, nil
+	}
+	spec, decl := findTypeDeclaration(pkg, obj.Name())
+	return spec, decl, pkg
+}
+
+// namedTypeOf returns the named type an expression refers to, through pointers,
+// lists, arrays and maps (of their values), or nil.
+func (p *TypeParser) namedTypeOf(expr ast.Expr) *types.Named {
+	if p.pkg == nil || p.pkg.TypesInfo == nil || expr == nil {
+		return nil
+	}
+	t := p.pkg.TypesInfo.TypeOf(expr)
+	for t != nil {
+		switch u := types.Unalias(t).(type) {
+		case *types.Pointer:
+			t = u.Elem()
+		case *types.Slice:
+			t = u.Elem()
+		case *types.Array:
+			t = u.Elem()
+		case *types.Map:
+			t = u.Elem()
+		case *types.Named:
+			return u
+		default:
+			return nil
+		}
+	}
+	return nil
+}
+
+// typeDocs lists the comments that can carry the directive of a type: the
+// comment of the declaration, then the one of the type in a group.
+func typeDocs(spec *ast.TypeSpec, decl *ast.GenDecl) []*ast.CommentGroup {
+	var docs []*ast.CommentGroup
+	if decl != nil && decl.Doc != nil {
+		docs = append(docs, decl.Doc)
+	}
+	if spec != nil && spec.Doc != nil {
+		docs = append(docs, spec.Doc)
+	}
+	return docs
+}
+
+// declaredVisibility returns the visibility a type declares with an //apidoc:
+// directive, or nil when it declares none.
+func declaredVisibility(spec *ast.TypeSpec, decl *ast.GenDecl) *Visibility {
+	for _, doc := range typeDocs(spec, decl) {
+		if v := parseTypeVisibility(doc); v.Declared {
+			return v
+		}
+	}
+	return nil
+}
+
+// referenceHidden reports whether the type that an expression refers to is
+// hidden from the document, so that whatever refers to it is left out. fk is the
+// key of the type.
+func (p *TypeParser) referenceHidden(expr ast.Expr, fk string, ctx *ParseContext) bool {
+	if ctx != nil && ctx.FullKey == "" {
+		// A reference to a type, as opposed to the declaration of one: what the
+		// type declares about itself has the last word over its name.
+		if named := p.namedTypeOf(expr); named != nil {
+			if spec, decl, pkg := p.typeDeclaration(named); spec != nil {
+				if visibility := declaredVisibility(spec, decl); visibility != nil {
+					if isEnumType(pkg, spec) {
+						return false // shown, with its values hidden
+					}
+					return shouldHideByVisibilityOfType(visibility, spec.Name.Name, p.audience)
+				}
+			}
+		}
+	}
+	last := fk[strings.LastIndex(fk, ".")+1:]
+	return shouldHideByDefault(last, p.audience)
+}
+
+// declarationHidden reports whether a type declaration is hidden from the
+// document and is not an enum: such a type has no schema at all.
+func (p *TypeParser) declarationHidden(spec *ast.TypeSpec) bool {
+	if isEnumType(p.pkg, spec) {
+		return false
+	}
+	return shouldHideType(p.pkg, spec, p.audience)
+}
+
+// markHidden records that a type of the module is hidden from the document, so
+// that the operations that use it can be left out.
+func (p *TypeParser) markHidden(key string) {
+	if p.session != nil {
+		p.session.markHidden(key)
+	}
+}

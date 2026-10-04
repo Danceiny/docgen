@@ -19,6 +19,9 @@ func (p *TypeParser) parseIndexExpr(fk string, ide *ast.IndexExpr, ctx *ParseCon
 }
 
 func (p *TypeParser) parseMap(expr *ast.MapType, ctx *ParseContext) *openapi3.SchemaRef {
+	if p.referenceHidden(expr.Value, p.generateTypeKey(expr.Value), &ParseContext{}) {
+		return nil // a map of a type that the document hides
+	}
 	valueSchema := p.parse(expr.Value, &ParseContext{importAlias: ctx.importAlias, GenericValue: ctx.GenericValue})
 	if valueSchema == nil && p.isFuncOrChan(expr.Value) {
 		return nil // a map of functions has nothing to describe
@@ -41,6 +44,9 @@ func boolPtr(v bool) *bool { return &v }
 
 func (p *TypeParser) parseArray(expr *ast.ArrayType, ctx *ParseContext) *openapi3.SchemaRef {
 	ctx2 := *ctx
+	if p.referenceHidden(expr.Elt, p.generateTypeKey(expr.Elt), &ParseContext{}) {
+		return nil // a list of a type that the document hides
+	}
 	elementRef := p.parse(expr.Elt, &ctx2)
 	if elementRef == nil {
 		// try to handle a type alias: if the element is an identifier, look for its type declaration in the current package

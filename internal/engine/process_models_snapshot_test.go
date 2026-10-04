@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/stretchr/testify/assert"
@@ -368,8 +369,19 @@ func TestProcessModels_EveryBasicTypeHasAPropertyOrAWarning(t *testing.T) {
 		if got := (shape{prop.Value.Type.Slice()[0], prop.Value.Format}); got != w {
 			t.Errorf("%s is %+v, want %+v", name, got, w)
 		}
+		if len(prop.Value.Enum) != 0 {
+			t.Errorf("%s has the enum %v: a basic type is not an enum", name, prop.Value.Enum)
+		}
 	}
 	assert.Len(t, basics.Value.Properties, len(want), "only the complex numbers are left out")
+
+	// A Duration is the number JSON writes, and no enum: the constants of the time
+	// package that make it look like one are not its values. Its default and its
+	// example are written as durations in the tags and are that number here.
+	timeout := basics.Value.Properties["timeout"].Value
+	assert.Empty(t, timeout.Enum)
+	assert.EqualValues(t, int64(5*time.Second), timeout.Default)
+	assert.EqualValues(t, int64(10*time.Minute), timeout.Example)
 
 	warned := map[string]bool{}
 	for _, rec := range logs.records {
@@ -465,4 +477,37 @@ func TestProcessModels_ATypeNamedTIsReadAsATypeParameter(t *testing.T) {
 	for _, rec := range logs.records {
 		assert.Less(t, rec.Level, slog.LevelWarn, "logged %q %v", rec.Message, attrsOf(rec))
 	}
+}
+
+// A struct that embeds itself, or two that embed each other, is a legal Go type
+// that encoding/json marshals; collecting the names of its fields must stop at
+// the second visit, not overflow the stack. A json option called "default" with
+// no value is not a default and not a crash.
+func TestProcessModels_EmbeddedCyclesAndMalformedJSONDefaults(t *testing.T) {
+	pkg := loadFixture(t, "testdata/embeddedcycles")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "snapshot", Version: "embeddedcycles"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+
+	key := func(name string) string {
+		return "github.com.Danceiny.docgen.internal.engine.testdata.embeddedcycles." + name
+	}
+	names := func(name string) []string {
+		schema := doc.Components.Schemas[key(name)]
+		require.NotNil(t, schema, name)
+		var out []string
+		for prop := range schema.Value.Properties {
+			out = append(out, prop)
+		}
+		sort.Strings(out)
+		return out
+	}
+	assert.Equal(t, []string{"name"}, names("T"))
+	assert.Contains(t, names("A"), "x")
+	assert.Contains(t, names("B"), "y")
+
+	defaults := doc.Components.Schemas[key("Defaults")]
+	require.NotNil(t, defaults)
+	assert.Nil(t, defaults.Value.Properties["plain"].Value.Default)
+	assert.Equal(t, "x", defaults.Value.Properties["valued"].Value.Default)
 }

@@ -56,8 +56,23 @@ type Config struct {
 	// @permission it does not have, as documents generated before this option
 	// existed do. Without it empty tags are left out.
 	KeepEmptyTags bool `yaml:"keep_empty_tags"`
+	// Compat keeps behaviour that documents generated before it was fixed have
+	// always had, so that regenerating them does not change them. A new
+	// configuration has no use for it.
+	Compat Compat `yaml:"compat"`
 	// Docs are the documents to generate.
 	Docs []Doc `yaml:"docs"`
+}
+
+// Compat lists the old behaviours a configuration can keep.
+type Compat struct {
+	// LegacyOperationTypes reads the types an operation takes and returns as
+	// documents always read them: a list is its element type, Product for
+	// []Product, and a map, an interface and an instantiated generic type such
+	// as Page[Product] are of an unknown type, which has no schema (so a result
+	// of one has no content) and which request.runtime_only can name as
+	// "unknown".
+	LegacyOperationTypes bool `yaml:"legacy_operation_types"`
 }
 
 // Doc describes one generated document.

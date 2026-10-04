@@ -428,6 +428,8 @@ api:
   prefix: /v1
   skip_methods: [GetChildren, SetStore]
 vendor_extensions: true
+compat:
+  legacy_operation_types: true
 response:
   envelope: {code: status, message: info, data: result}
   default_statuses:
@@ -444,6 +446,9 @@ func TestParseReadsAPIResponseAndExtensions(t *testing.T) {
 	}
 	if cfg.API.Prefix != "/v1" || !cfg.VendorExtensions {
 		t.Fatalf("api %+v extensions %v", cfg.API, cfg.VendorExtensions)
+	}
+	if !cfg.Compat.LegacyOperationTypes {
+		t.Fatal("compat.legacy_operation_types is not read")
 	}
 	if !slices.Equal(cfg.API.SkipMethods, []string{"GetChildren", "SetStore"}) {
 		t.Fatalf("skip_methods = %v", cfg.API.SkipMethods)

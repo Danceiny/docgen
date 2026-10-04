@@ -27,12 +27,9 @@ func (p *TypeParser) getEmbeddedFieldNamesFromAST(expr ast.Expr, ctx *ParseConte
 	case *ast.ArrayType:
 		// an array type, such as type User struct { []string }
 		fieldNames = p.getEmbeddedFieldNamesFromAST(t.Elt, ctx)
-	case *ast.InterfaceType:
-		// an interface type, such as type User struct { interface{} }
-		fieldNames = p.getEmbeddedFieldNamesFromAST(t, ctx)
 	case *ast.StructType:
 		// a struct type, such as type User struct { struct { BaseModel } }
-		fieldNames = p.getEmbeddedFieldNamesFromAST(t, ctx)
+		fieldNames = p.extractFieldNamesFromStruct(t, ctx)
 	}
 
 	return fieldNames

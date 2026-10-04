@@ -72,6 +72,9 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 
 		// embedded fields (embedded structs)
 		if len(field.Names) == 0 {
+			if p.referenceHidden(ft, p.generateTypeKey(ft), fieldCtx) {
+				continue
+			}
 			// for an embedded field the order of its fields has to be kept:
 			// its fields are added where the embedded field is in the struct
 
@@ -199,6 +202,17 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 
 // extractFieldNamesFromStruct returns the field names of a struct type.
 func (p *TypeParser) extractFieldNamesFromStruct(st *ast.StructType, ctx *ParseContext) []string {
+	// A struct that embeds itself, directly or through other structs, has the
+	// names of its fields once.
+	if p.embedding[st] {
+		return nil
+	}
+	if p.embedding == nil {
+		p.embedding = make(map[*ast.StructType]bool)
+	}
+	p.embedding[st] = true
+	defer delete(p.embedding, st)
+
 	var fieldNames []string
 
 	for _, field := range st.Fields.List {

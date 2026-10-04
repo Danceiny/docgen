@@ -16,6 +16,7 @@ type Visibility struct {
 	Whitelist []string // allowlist of values (custom scope only)
 	Blacklist []string // blocklist of values
 	Language  string   // supported languages, such as "zh", "en", "ar"
+	Declared  bool     // an //apidoc: directive says so; without one the name of the type decides
 }
 
 // EnumVisibility is the visibility configuration of an enum (kept for backward compatibility).
@@ -68,6 +69,7 @@ func parseApidocContent(content string) *Visibility {
 		Whitelist: []string{},
 		Blacklist: []string{},
 		Language:  "",
+		Declared:  true,
 	}
 
 	// is there a language?
@@ -115,17 +117,31 @@ func shouldHideType(pkg *packages.Package, typeSpec *ast.TypeSpec, aud Audience)
 	}
 
 	visibility := parseTypeVisibility(doc)
+	if !visibility.Declared {
+		for _, d := range typeDocs(typeSpec, nil) {
+			if v := parseTypeVisibility(d); v.Declared {
+				visibility = v
+				break
+			}
+		}
+	}
+	return shouldHideByVisibilityOfType(visibility, typeSpec.Name.Name, aud)
+}
 
-	// decide from the kind of document and the visibility configuration
+// shouldHideByVisibilityOfType decides from the kind of document and what a type
+// declares about itself; a type that declares nothing is decided by its name.
+func shouldHideByVisibilityOfType(visibility *Visibility, name string, aud Audience) bool {
 	switch visibility.Scope {
 	case "hidden":
-		Logger().Debug("type is hidden by its visibility annotation", "type", typeSpec.Name.Name)
+		Logger().Debug("type is hidden by its visibility annotation", "type", name)
 		return true
 	case "internal":
 		// internal type: hidden in the public document, shown in the internal one
-		shouldHide := aud.isPublic()
-		return shouldHide
+		return aud.isPublic()
 	case "public":
+		if !visibility.Declared {
+			return shouldHideByDefault(name, aud)
+		}
 		// public type: shown in both documents (internal is a superset of public)
 		return false
 	case "custom":
@@ -133,7 +149,7 @@ func shouldHideType(pkg *packages.Package, typeSpec *ast.TypeSpec, aud Audience)
 		return shouldHideCustomType(visibility, aud)
 	default:
 		// default: stay compatible with the Internal name prefix rule
-		return shouldHideByDefault(typeSpec.Name.Name, aud)
+		return shouldHideByDefault(name, aud)
 	}
 }
 

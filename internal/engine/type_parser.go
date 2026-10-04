@@ -30,6 +30,8 @@ type TypeParser struct {
 	mergeTasks  *list.List
 	activeTypes map[string]bool
 	activeMu    sync.Mutex
+	// embedding holds the structs whose field names are being collected.
+	embedding map[*ast.StructType]bool
 }
 
 type MergeTask struct {
@@ -52,6 +54,7 @@ func NewTypeParser(pkg *packages.Package, doc *openapi3.T, sessions ...*Generati
 		defers:      list.New(),
 		mergeTasks:  list.New(),
 		activeTypes: make(map[string]bool),
+		embedding:   make(map[*ast.StructType]bool),
 	}
 }
 
@@ -83,6 +86,13 @@ func (p *TypeParser) parseTypeSpec(typeSpec *ast.TypeSpec, ctx *ParseContext) {
 	typeName := typeSpec.Name.Name
 
 	fk := p.generateStructKey(typeName)
+	if p.declarationHidden(typeSpec) {
+		// No schema: nothing refers to a type that is hidden, and the operations
+		// that use it are left out.
+		p.deleteSchema(fk)
+		p.markHidden(fk)
+		return
+	}
 	if v := p.getRealSchemaFromDoc(fk); v != nil {
 		p.updateSchemaInDocForce(fk, updateDescriptionForce(v, ctx.Doc, ctx.Comment))
 	} else {
@@ -189,6 +199,12 @@ func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.S
 		}
 	}()
 
+	// Should it be hidden? This comes before the cache: a type that was described
+	// before this reference is reached must not be copied into it.
+	if p.referenceHidden(expr, fk, ctx) {
+		return nil
+	}
+
 	if cached := p.getRealSchemaFromDoc(fk); cached != nil {
 		// updateDescription cannot be used here: it would pollute the comments of the structure
 		v := CopyRef(cached)
@@ -197,11 +213,6 @@ func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.S
 
 	vs := strings.Split(fk, ".")
 	last := vs[len(vs)-1]
-
-	// should it be hidden? (this includes the compatibility check for the Internal prefix)
-	if shouldHideByDefault(last, p.audience) {
-		return nil
-	}
 
 	if v := getBasicTypeSchema(last); v != nil {
 		return CopyRef(v.NewRef())
