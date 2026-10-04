@@ -594,7 +594,7 @@ func isRequiredField(field *ast.Field) bool {
 		return true
 	}
 	validate, binding := getValueFromTag(field, "validate"), getValueFromTag(field, "binding")
-	if settings.CompatLegacyFieldShapes {
+	if settings.CompatLegacySchemaShapes {
 		return validate == "required" || binding == "required"
 	}
 	return hasRule(validate, "required") || hasRule(binding, "required")

@@ -250,14 +250,14 @@ func (p *TypeParser) extractFieldNamesFromStruct(st *ast.StructType, ctx *ParseC
 // with the one name it has: a declaration of several names (Lat, Lng float64)
 // becomes a field for each, a blank name (_) is no field, and an embedded field
 // that has a json name (Base `json:"base"`) is a field of that name, not a
-// flattened one. A configuration that keeps legacy_field_shapes gets what
+// flattened one. A configuration that keeps legacy_schema_shapes gets what
 // documents always had: the first name of a declaration, and the embedded field
 // flattened.
 func structFields(st *ast.StructType) []*ast.Field {
 	if st == nil || st.Fields == nil {
 		return nil
 	}
-	if settings.CompatLegacyFieldShapes {
+	if settings.CompatLegacySchemaShapes {
 		return st.Fields.List
 	}
 	fields := make([]*ast.Field, 0, len(st.Fields.List))

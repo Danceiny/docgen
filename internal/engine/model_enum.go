@@ -3,7 +3,9 @@ package engine
 import (
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/token"
+	"go/types"
 	"strconv"
 	"strings"
 
@@ -138,6 +140,81 @@ func generateEnumSchemaFromEntry(entries []EnumEntry, underlyingType string, whe
 
 // collectEnumEntries collects the names, the values and the comments of the constants of an enum.
 func collectEnumEntries(pkg *packages.Package, typeName string) []EnumEntry {
+	if !settings.CompatLegacySchemaShapes {
+		if entries, ok := collectEnumEntriesByType(pkg, typeName); ok {
+			return entries
+		}
+	}
+	return collectEnumEntriesFromSyntax(pkg, typeName)
+}
+
+// collectEnumEntriesByType collects the constants of the enum type, whichever way
+// they are declared: the value is what the compiler computed, so a constant
+// declared with iota or an expression has its value, and one that repeats the
+// type implicitly (the B of `A Status = iota` followed by `B`) is there. It
+// reports false when the package has no type information to ask.
+func collectEnumEntriesByType(pkg *packages.Package, typeName string) ([]EnumEntry, bool) {
+	if pkg == nil || pkg.Types == nil || pkg.TypesInfo == nil {
+		return nil, false
+	}
+	typeObj, ok := pkg.Types.Scope().Lookup(typeName).(*types.TypeName)
+	if !ok || typeObj.IsAlias() {
+		// An alias, type Status = string, is the type it stands for, and every
+		// constant of that type would be one of its values: only the declarations
+		// that name it can be told.
+		return nil, false
+	}
+	var entries []EnumEntry
+	// in the order of the source: the files of the package, then the declarations
+	for _, file := range pkg.Syntax {
+		for _, decl := range file.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok || genDecl.Tok != token.CONST {
+				continue
+			}
+			blockDocComments := extractComments(genDecl.Doc)
+			for _, spec := range genDecl.Specs {
+				valueSpec, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, name := range valueSpec.Names {
+					c, ok := pkg.TypesInfo.Defs[name].(*types.Const)
+					if !ok || name.Name == "_" || !types.Identical(c.Type(), typeObj.Type()) {
+						continue
+					}
+					entries = append(entries, EnumEntry{
+						Name:    name.Name,
+						Value:   constantText(c.Val()),
+						Doc:     blockDocComments,
+						Comment: strings.TrimPrefix(extractDescription(valueSpec.Doc, valueSpec.Comment), name.Name+" "),
+					})
+				}
+			}
+		}
+	}
+	return entries, true
+}
+
+// constantText is the value of a constant as the text a schema parses it from: a
+// string without quotes, a number in decimal.
+func constantText(v constant.Value) string {
+	switch v.Kind() {
+	case constant.String:
+		return constant.StringVal(v)
+	case constant.Bool:
+		return strconv.FormatBool(constant.BoolVal(v))
+	case constant.Float:
+		f, _ := constant.Float64Val(v)
+		return strconv.FormatFloat(f, 'g', -1, 64)
+	default:
+		return v.ExactString()
+	}
+}
+
+// collectEnumEntriesFromSyntax collects the constants that are declared with the
+// type of the enum and a literal; the value of any other is empty.
+func collectEnumEntriesFromSyntax(pkg *packages.Package, typeName string) []EnumEntry {
 	var entries []EnumEntry
 	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {

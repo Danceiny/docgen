@@ -64,9 +64,9 @@ func TestFieldShapesAreReadAsEncodingJSONReadsThem(t *testing.T) {
 	assert.Nil(t, anything["list"].Value.Items.Value.Type, "the items of a list of any are any value")
 }
 
-// legacy_field_shapes keeps what documents generated before the fix have.
+// legacy_schema_shapes keeps what documents generated before the fix have.
 func TestFieldShapesOfLegacyDocuments(t *testing.T) {
-	doc := fieldShapes(t, Settings{CompatLegacyFieldShapes: true})
+	doc := fieldShapes(t, Settings{CompatLegacySchemaShapes: true})
 
 	assert.Equal(t, []string{"Lat", "_"}, propertyNames(doc, "Point"), "the first name of a declaration, and the blank field as a property")
 	assert.Equal(t, []string{"id", "name"}, propertyNames(doc, "Nested"), "an embedded field is flattened whatever its json name")

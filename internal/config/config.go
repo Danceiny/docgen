@@ -77,14 +77,17 @@ type Compat struct {
 	// of one has no content) and which request.runtime_only can name as
 	// "unknown".
 	LegacyOperationTypes bool `yaml:"legacy_operation_types"`
-	// LegacyFieldShapes reads the fields of a struct as documents always read
-	// them: a name that is repeated in a declaration (Lat, Lng float64) is the
-	// first name only, a field embedded under a json name (Base `json:"base"`)
-	// is flattened into the struct although encoding/json nests it, and a field
-	// is required when its validate or binding tag is exactly "required", not
-	// when it is one of several rules (required,email), and any is an object
-	// and interface{} is a string, an integer or an object, not any value.
-	LegacyFieldShapes bool `yaml:"legacy_field_shapes"`
+	// LegacySchemaShapes builds schemas as documents always built them: a name
+	// that is repeated in a declaration (Lat, Lng float64) is the first name only,
+	// a field embedded under a json name (Base `json:"base"`) is flattened into
+	// the struct although encoding/json nests it, a field is required when its
+	// validate or binding tag is exactly "required" and not when that is one of
+	// several rules (required,email), any is an object and interface{} is a
+	// string, an integer or an object where they are any value, and the values of
+	// an enum are the constants that are declared with the type and a literal
+	// (so that a constant declared with iota or an expression has an empty value
+	// and one that repeats the type implicitly is left out).
+	LegacySchemaShapes bool `yaml:"legacy_schema_shapes"`
 }
 
 // Doc describes one generated document.

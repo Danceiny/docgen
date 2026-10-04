@@ -27,7 +27,7 @@ func engineSettings(cfg *config.Config) engine.Settings {
 
 		FieldTokens:                fieldTokensOf(cfg),
 		CompatLegacyOperationTypes: cfg.Compat.LegacyOperationTypes,
-		CompatLegacyFieldShapes:    cfg.Compat.LegacyFieldShapes,
+		CompatLegacySchemaShapes:   cfg.Compat.LegacySchemaShapes,
 	}
 	if env := cfg.Response.Envelope; env != nil {
 		s.Envelope = &engine.Envelope{Code: env.Code, Message: env.Message, Data: env.Data}
