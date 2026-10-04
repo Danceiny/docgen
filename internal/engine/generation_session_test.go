@@ -47,3 +47,15 @@ func TestValidatePackageGraphSaysWhy(t *testing.T) {
 		t.Errorf("the error lists more than the first errors: %q", err)
 	}
 }
+
+func TestAGenerationSessionSaysWhereToRunTheToolWhenThereIsNoModule(t *testing.T) {
+	_, err := NewGenerationSession(t.TempDir())
+	if err == nil {
+		t.Fatal("a directory without go.mod was loaded")
+	}
+	for _, want := range []string{"has no go.mod", "root of the module", "-C"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not say %q: %v", want, err)
+		}
+	}
+}

@@ -3,6 +3,7 @@ package pipeline
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/Danceiny/docgen/internal/config"
 	"github.com/Danceiny/docgen/internal/engine"
@@ -24,6 +25,7 @@ func engineSettings(cfg *config.Config) engine.Settings {
 		VendorExtensions: cfg.VendorExtensions,
 		KeepEmptyTags:    cfg.KeepEmptyTags,
 
+		FieldTokens:                fieldTokensOf(cfg),
 		CompatLegacyOperationTypes: cfg.Compat.LegacyOperationTypes,
 		CompatLegacyFieldShapes:    cfg.Compat.LegacyFieldShapes,
 	}
@@ -109,4 +111,18 @@ func schemaFromSpec(spec config.TypeSpec) *openapi3.Schema {
 		s.Example = spec.Example
 	}
 	return s
+}
+
+// fieldTokensOf lists the legacy field tokens that any document of the
+// configuration names.
+func fieldTokensOf(cfg *config.Config) []string {
+	var tokens []string
+	for _, d := range cfg.Docs {
+		for _, token := range d.LegacyFieldTokens {
+			if !slices.Contains(tokens, token) {
+				tokens = append(tokens, token)
+			}
+		}
+	}
+	return tokens
 }

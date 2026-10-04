@@ -42,7 +42,7 @@ func NewGenerationSession(moduleDir string, opts ...SessionOption) (*GenerationS
 		if err == nil {
 			err = fmt.Errorf("go.mod is a directory")
 		}
-		return nil, fmt.Errorf("module dir %s has no go.mod: %w", abs, err)
+		return nil, fmt.Errorf("module dir %s has no go.mod: %w; docgen documents the Go module in the current directory, so run it at the root of the module or name that directory with -C", abs, err)
 	}
 
 	cfg := &packages.Config{

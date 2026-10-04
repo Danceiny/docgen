@@ -17,10 +17,27 @@ import (
 
 // at says where in the source a node is, for the diagnostics that point at code.
 func (p *TypeParser) at(node ast.Node) string {
-	if p == nil || p.pkg == nil || p.pkg.Fset == nil || node == nil {
+	if p == nil {
 		return ""
 	}
-	pos := p.pkg.Fset.Position(node.Pos())
+	return positionOf(p.pkg, node)
+}
+
+// atField says where the field that is being parsed is, or "" when it is not a
+// field that is.
+func (p *TypeParser) atField(ctx *ParseContext) string {
+	if ctx == nil || ctx.Field == nil {
+		return ""
+	}
+	return p.at(ctx.Field)
+}
+
+// positionOf says where a node of a package is, as file:line, or "".
+func positionOf(pkg *packages.Package, node ast.Node) string {
+	if pkg == nil || pkg.Fset == nil || node == nil {
+		return ""
+	}
+	pos := pkg.Fset.Position(node.Pos())
 	if !pos.IsValid() {
 		return ""
 	}

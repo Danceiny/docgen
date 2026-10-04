@@ -637,3 +637,15 @@ docs:
 		}
 	}
 }
+
+func TestLoadSaysWhatToDoWhenThereIsNoFile(t *testing.T) {
+	_, err := Load(filepath.Join(t.TempDir(), "docgen.yaml"))
+	if err == nil {
+		t.Fatal("a missing file was loaded")
+	}
+	for _, want := range []string{"read config", "no such file", "-config", "Quick start"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not say %q: %v", want, err)
+		}
+	}
+}

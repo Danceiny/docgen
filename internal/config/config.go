@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"go/token"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -289,6 +290,9 @@ type Server struct {
 // Load reads and validates the configuration file at path.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("read config: %w; docgen reads the file that -config names, docgen.yaml in the module directory by default, and the Quick start of the README has a minimal one to start from", err)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("read config: %w", err)
 	}

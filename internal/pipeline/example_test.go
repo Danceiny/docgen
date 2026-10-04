@@ -340,3 +340,25 @@ func TestConfigKeysThatNameNoTypeAreReported(t *testing.T) {
 		t.Errorf("reported %v, want %v", guesses, want)
 	}
 }
+
+// A repository checked out on Windows can have the line feeds of its documents
+// turned into carriage returns and line feeds; that is not drift.
+func TestCheckDoesNotTakeLineEndingsForDrift(t *testing.T) {
+	dir := t.TempDir()
+	copyTree(t, petstoreDir, dir)
+	cfg := petstoreConfig(t, dir)
+	for _, d := range cfg.Docs {
+		path := filepath.Join(dir, d.Output)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(strings.ReplaceAll(string(data), "\n", "\r\n")), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	drifts, err := Check(Options{Dir: dir, Config: cfg})
+	if err != nil || len(drifts) != 0 {
+		t.Fatalf("documents with CRLF line endings: %+v, %v", drifts, err)
+	}
+}

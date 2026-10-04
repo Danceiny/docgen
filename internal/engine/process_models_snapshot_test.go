@@ -539,27 +539,46 @@ func TestServiceNamesAreConstantsWhereverTheyAreDeclared(t *testing.T) {
 // right spelling when there is one; an annotation that is nothing like a known
 // one belongs to another reader of the comment and is left alone.
 func TestMistypedAnnotationsAndDirectivesAreReported(t *testing.T) {
+	withSettings(t, Settings{FieldTokens: []string{"Staff"}}, "github.com/Danceiny/docgen")
 	logs := captureLogs(t)
 	pkg := loadFixture(t, "testdata/mistakes")
 	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "snapshot", Version: "mistakes"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
 	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
 	runProcessModelsTasks(t, defers, mergeTasks, doc)
-	FindServiceImplementations(pkg)
+	for _, service := range FindServiceImplementations(pkg) {
+		for _, method := range service.Methods {
+			buildRequestBody(method, doc)
+		}
+	}
 
 	guesses := map[string]string{} // annotation -> what it should be
 	types := map[string]string{}   // type -> the mistake in its directive
+	values := map[string]string{}  // value of a directive -> the type that lists it
+	fields := map[string]string{}  // field whose apidoc tag nobody reads -> what it was probably meant to be
+	var extra []string             // methods that take parameters nobody reads
 	for _, rec := range logs.records {
 		if rec.Level != slog.LevelWarn {
 			continue
 		}
 		attrs := attrsOf(rec)
 		switch {
+		case attrs["parameters"] != "":
+			extra = append(extra, attrs["method"])
+		case attrs["field"] != "":
+			fields[attrs["field"]] = attrs["didYouMean"]
 		case attrs["annotation"] != "":
 			guesses[attrs["annotation"]] = attrs["didYouMean"]
+		case attrs["value"] != "":
+			values[attrs["value"]] = attrs["type"]
 		case attrs["type"] != "":
 			types[attrs["type"]] = rec.Message
 		}
 	}
+	assert.Equal(t, map[string]string{"Typo": "internal", "Prose": ""}, fields,
+		"a typo is one edit from a scope; a token that a document lists, a scope and - are not reported")
+	assert.Equal(t, []string{"Two"}, extra, "the second parameter of Two is not in the document")
+	assert.Equal(t, map[string]string{"fast": "Speed"}, values,
+		"fast is what the constant is on the wire, and SpeedSlow is its name")
 	assert.Equal(t, map[string]string{"@respone": "@response", "@Tags": "@tags"}, guesses,
 		"@auth is nothing like a known annotation and belongs to another reader of the comment")
 	assert.Contains(t, types["Spaced"], "no space after the slashes")

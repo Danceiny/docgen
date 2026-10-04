@@ -2,6 +2,7 @@ package engine
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/getkin/kin-openapi/openapi3"
 
@@ -60,6 +61,10 @@ type Settings struct {
 	// x-apifox-orders, x-apifox-enum, x-apifox-folder, x-enum-varnames,
 	// x-enum-comments, x-display-name, x-primary-property and x-go-interface.
 	VendorExtensions bool
+	// FieldTokens are the apidoc:"<token>" values that some document of the
+	// configuration lists in legacy_field_tokens. A token that is none of them, nor
+	// one of the scopes, is a mistake that hides the field, and is reported.
+	FieldTokens []string
 	// CompatLegacyOperationTypes reads the types of the parameters and results of
 	// an operation as documents always read them: a list is its element type, and
 	// a map, an interface and an instantiated generic type are unknown.
@@ -116,7 +121,24 @@ type BinaryResponse struct {
 var settings Settings
 
 // Configure sets the repository-specific settings for the run.
-func Configure(s Settings) { settings = s }
+func Configure(s Settings) {
+	settings = s
+	reported = sync.Map{}
+}
+
+// reported has what a run has already warned about, so that a mistake in a
+// source file is reported once in a run, not once in each document.
+var reported sync.Map
+
+// firstTime reports whether a mistake, named by its kind and its position, has
+// not been reported in this run, and remembers it has.
+func firstTime(kind, at string) bool {
+	if at == "" {
+		return true // not knowing where it is, it cannot be told from another
+	}
+	_, again := reported.LoadOrStore(kind+" "+at, true)
+	return !again
+}
 
 // headerTypeKey returns the full key of the header type a method with the given
 // @headerType gets: the configured one, else the default one, else "" for none.

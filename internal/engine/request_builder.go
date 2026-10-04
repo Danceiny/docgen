@@ -23,6 +23,7 @@ func IsQueryStringRequest(typeFullKey string) bool {
 }
 
 func buildRequestBody(method *Method, doc *openapi3.T) *openapi3.RequestBodyRef {
+	warnAboutParametersNobodyReads(method)
 	if IsQueryStringRequest(firstBodyTypeKey(method)) {
 		return nil // Query-string DTOs bind from the URL query; no request body.
 	}
@@ -57,6 +58,26 @@ func buildRequestBody(method *Method, doc *openapi3.T) *openapi3.RequestBodyRef 
 		}
 	}
 	return nil
+}
+
+// warnAboutParametersNobodyReads reports a method that takes more than one
+// parameter after the context. The request of an operation is its first
+// parameter; the others have no place in the document, and a scalar or a struct
+// that was meant to be part of the request disappears without a word.
+func warnAboutParametersNobodyReads(method *Method) {
+	if method == nil {
+		return
+	}
+	bodies := 0
+	for _, p := range method.Params {
+		if p.In == "body" {
+			bodies++
+		}
+	}
+	if bodies > 1 && firstTime("parameters", method.Pos) {
+		Logger().Warn("the method takes more than one parameter after the context; the request is the first one and the others are not in the document",
+			"method", method.Name, "parameters", bodies, "at", method.Pos)
+	}
 }
 
 // firstBodyTypeKey returns the FullKey of the first body parameter, or "" if

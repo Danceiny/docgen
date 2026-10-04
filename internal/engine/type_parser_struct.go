@@ -3,10 +3,13 @@ package engine
 import (
 	"go/ast"
 	"go/types"
+	"slices"
 	"strings"
 	"unicode"
 
 	"github.com/getkin/kin-openapi/openapi3"
+
+	"github.com/Danceiny/docgen/internal/suggest"
 )
 
 // parseStruct parses a struct type (the core of it).
@@ -28,6 +31,7 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 			Field:        field,
 			GenericValue: ctx.GenericValue,
 		}
+		p.warnAboutFieldTagNobodyReads(field)
 		// the name of the field and whether to skip it (a tag on an embedded field skips it whole)
 		jsonName, example, defaultVal, skip := getAPIFieldName(field, p.audience)
 		if skip {
@@ -336,4 +340,31 @@ func (p *TypeParser) realTypeNamedT(expr ast.Expr) bool {
 	}
 	_, isParam := t.(*types.TypeParam)
 	return !isParam
+}
+
+// fieldScopes are the values of an apidoc tag that are scopes of their own.
+var fieldScopes = []string{"-", "public", "internal", "hidden", "custom"}
+
+// warnAboutFieldTagNobodyReads reports a field whose apidoc tag has a value that
+// is neither a scope nor a token that some document lists. Such a field is hidden
+// from every document, which is the quietest way for a typo (apidoc:"internl") or
+// a description put in the wrong tag to make a field disappear.
+func (p *TypeParser) warnAboutFieldTagNobodyReads(field *ast.Field) {
+	value := getFieldApidocTag(field)
+	if value == "" || isNewVisibilityFormat(value) || value == "-" || slices.Contains(settings.FieldTokens, value) {
+		return
+	}
+	at := p.at(field)
+	if !firstTime("apidoc tag", at) {
+		return
+	}
+	name := ""
+	if len(field.Names) > 0 {
+		name = field.Names[0].Name
+	}
+	args := []any{"field", name, "value", value, "at", at}
+	if guess := suggest.ClosestWithin(strings.ToLower(value), append(append([]string(nil), fieldScopes...), settings.FieldTokens...), 2); guess != "" {
+		args = append(args, "didYouMean", guess)
+	}
+	Logger().Warn("the apidoc tag of a field has a value that is none of the scopes (-, public, internal, hidden) and that no document lists in legacy_field_tokens, so the field is hidden from every document", args...)
 }

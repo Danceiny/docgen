@@ -37,7 +37,7 @@ func isEnumType(pkg *packages.Package, typeSpec *ast.TypeSpec) bool {
 func generateEnumSchemaWithVisibility(pkg *packages.Package, typeSpec *ast.TypeSpec, underlyingType string, aud Audience) *openapi3.SchemaRef {
 	// the visible enum values
 	enumValues := collectVisibleEnumEntries(pkg, typeSpec.Name.Name, aud)
-	return generateEnumSchemaFromEntry(enumValues, underlyingType).NewRef()
+	return generateEnumSchemaFromEntry(enumValues, underlyingType, "type", typeSpec.Name.Name, "at", positionOf(pkg, typeSpec)).NewRef()
 }
 
 type EnumEntry struct {
@@ -47,7 +47,8 @@ type EnumEntry struct {
 	Comment string // comment, such as "the status is normal"
 }
 
-func generateEnumSchemaFromEntry(entries []EnumEntry, underlyingType string) *openapi3.Schema {
+// where are attributes that say which enum it is, for the diagnostics.
+func generateEnumSchemaFromEntry(entries []EnumEntry, underlyingType string, where ...any) *openapi3.Schema {
 	// take all enum values and convert them according to the underlying type
 	enumValues := make([]any, len(entries))
 	for i, entry := range entries {
@@ -102,7 +103,7 @@ func generateEnumSchemaFromEntry(entries []EnumEntry, underlyingType string) *op
 	// create the schema and fill in the fields
 	ori := getBasicTypeSchema(underlyingType)
 	if ori == nil {
-		Logger().Warn("enum underlying type has no schema, using object", "underlyingType", underlyingType)
+		Logger().Warn("enum underlying type has no schema, using object", append([]any{"underlyingType", underlyingType}, where...)...)
 		ori = getBasicTypeSchema("object")
 	}
 	schema := *ori
