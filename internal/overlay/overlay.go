@@ -27,10 +27,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"slices"
 	"sort"
 	"strings"
 
+	"github.com/Danceiny/docgen/internal/yamlerr"
 	"gopkg.in/yaml.v3"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -84,6 +86,16 @@ func Load(path string) (*File, error) {
 	return f, nil
 }
 
+func describeOverlayType(goType string) (string, []string, bool) {
+	switch goType {
+	case "overlay.File":
+		return "the top level of an overlay file", yamlerr.Keys(reflect.TypeOf(File{})), true
+	case "overlay.Schema":
+		return "a schema of an overlay, which understands only these keys", yamlerr.Keys(reflect.TypeOf(Schema{})), true
+	}
+	return "", nil, false
+}
+
 // Parse decodes and validates the content of an overlay file. Every problem is
 // reported at once.
 func Parse(data []byte) (*File, error) {
@@ -91,7 +103,7 @@ func Parse(data []byte) (*File, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&f); err != nil {
-		return nil, fmt.Errorf("decode overlay: %w", err)
+		return nil, fmt.Errorf("decode overlay: %w", yamlerr.Explain(err, describeOverlayType))
 	}
 	if err := f.validate(); err != nil {
 		return nil, err

@@ -245,6 +245,9 @@ func normalizeSchemaRef(doc *openapi3.T, ref *openapi3.SchemaRef, seen map[*open
 	if strings.HasPrefix(ref.Ref, "#/components/schemas/") {
 		key := strings.TrimPrefix(ref.Ref, "#/components/schemas/")
 		if _, ok := doc.Components.Schemas[key]; !ok {
+			if key == "unknown" || strings.HasPrefix(key, "unknown.") {
+				return fmt.Errorf("missing local schema reference %q: the type is not a named type of the module: a map, a list of lists or another unnamed type cannot be what an operation takes or returns directly; wrap it in a struct", ref.Ref)
+			}
 			return fmt.Errorf("missing local schema reference %q: no schema was generated for that type; the package that declares it has to match a pattern of \"models\" in the configuration, or the type has to be declared in the module", ref.Ref)
 		}
 	}

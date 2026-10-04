@@ -99,7 +99,7 @@ func validatePackageGraph(pkgs []*packages.Package) error {
 		}
 		seen[pkg.ID] = true
 		if len(pkg.Errors) != 0 {
-			return fmt.Errorf("package %s does not build: %s", pkg.PkgPath, describePackageErrors(pkg.Errors))
+			return fmt.Errorf("package %s does not build: %s (docgen reads the module the way go build ./... does: fix the errors, or run go mod download if a module is missing)", pkg.PkgPath, describePackageErrors(pkg.Errors))
 		}
 		paths := make([]string, 0, len(pkg.Imports))
 		for path := range pkg.Imports {

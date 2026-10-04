@@ -1,6 +1,12 @@
 package pipeline
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+
+	"github.com/Danceiny/docgen/internal/engine"
+	"golang.org/x/tools/go/packages"
+)
 
 func TestPatternsAreLiteralExceptForStar(t *testing.T) {
 	for _, tc := range []struct {
@@ -45,5 +51,22 @@ func TestNoPatternCanFailToCompile(t *testing.T) {
 	// Every character but "*" is quoted, so no input is a regular expression.
 	for _, p := range []string{"(", "[", "\\", "a**b", "?", "{1", "*(*", ""} {
 		compilePatterns([]string{p}) // must not panic
+	}
+}
+
+// A pattern that matches no package is the mistake behind most empty documents:
+// the sample "*/service" does not match a package service at the module root.
+func TestUnmatchedPatternsAreFound(t *testing.T) {
+	engine.ModuleName = "example.com/shop"
+	t.Cleanup(func() { engine.ModuleName = "" })
+
+	pkgs := []*packages.Package{
+		{ID: "example.com/shop/service"}, // at the module root
+		{ID: "example.com/shop/orders/domain"},
+		{ID: "example.com/shop"}, // the module root itself
+	}
+	got := unmatchedPatterns(pkgs, []string{"*/service", "service", "*/domain", "nope", "*"})
+	if want := []string{"*/service", "nope"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("unmatched = %v, want %v", got, want)
 	}
 }

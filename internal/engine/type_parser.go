@@ -73,6 +73,7 @@ func (p *TypeParser) ParseAllDecls() {
 							Doc:         genDecl.Doc,
 							Comment:     typeSpec.Comment,
 						}
+						p.warnAboutDirectiveMistakes(typeSpec, genDecl)
 						p.parseTypeSpec(typeSpec, ctx) // parse the type declaration
 					}
 				}

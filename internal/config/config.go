@@ -12,10 +12,13 @@ import (
 	"go/token"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 
+	"github.com/Danceiny/docgen/internal/yamlerr"
 	"gopkg.in/yaml.v3"
 )
 
@@ -294,9 +297,17 @@ func Parse(data []byte) (*Config, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
+		err = yamlerr.Explain(err, describeConfigType)
 		if errors.Is(err, io.EOF) {
 			return nil, errors.New("the configuration is empty: it needs at least \"version: 1\" and a document under \"docs:\"")
 		}
+		return nil, fmt.Errorf("decode config: %w", err)
+	}
+	// A second YAML document, after a ---, would be ignored: say so.
+	var second yaml.Node
+	if err := dec.Decode(&second); err == nil {
+		return nil, errors.New("the configuration has a second YAML document (after a ---), which would be ignored: only the first is read")
+	} else if !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("decode config: %w", err)
 	}
 	if err := cfg.validate(); err != nil {
@@ -310,7 +321,43 @@ func Parse(data []byte) (*Config, error) {
 	return &cfg, nil
 }
 
+// configTypes says where in a configuration file each of its Go types is.
+var configTypes = map[string]struct {
+	where string
+	typ   reflect.Type
+}{
+	"config.Config":         {"the top level of the configuration", reflect.TypeOf(Config{})},
+	"config.Compat":         {"compat", reflect.TypeOf(Compat{})},
+	"config.API":            {"api", reflect.TypeOf(API{})},
+	"config.Headers":        {"headers", reflect.TypeOf(Headers{})},
+	"config.Request":        {"request", reflect.TypeOf(Request{})},
+	"config.MultipartField": {"an entry of request.multipart", reflect.TypeOf(MultipartField{})},
+	"config.QueryField":     {"an entry of request.query", reflect.TypeOf(QueryField{})},
+	"config.RuntimeOnly":    {"an entry of request.runtime_only", reflect.TypeOf(RuntimeOnly{})},
+	"config.Response":       {"response", reflect.TypeOf(Response{})},
+	"config.Envelope":       {"response.envelope", reflect.TypeOf(Envelope{})},
+	"config.BinaryResponse": {"an entry of response.binary", reflect.TypeOf(BinaryResponse{})},
+	"config.Errors":         {"errors", reflect.TypeOf(Errors{})},
+	"config.TypeSpec":       {"an entry of type_map (or the items of one)", reflect.TypeOf(TypeSpec{})},
+	"config.Doc":            {"a document (an entry of docs)", reflect.TypeOf(Doc{})},
+	"config.Info":           {"info of a document", reflect.TypeOf(Info{})},
+	"config.Server":         {"an entry of servers", reflect.TypeOf(Server{})},
+	"config.OverlayFile":    {"an entry of overlay", reflect.TypeOf(OverlayFile{})},
+	"config.Public":         {"public of a document", reflect.TypeOf(Public{})},
+}
+
+func describeConfigType(goType string) (string, []string, bool) {
+	t, ok := configTypes[goType]
+	if !ok {
+		return "", nil, false
+	}
+	return t.where, yamlerr.Keys(t.typ), true
+}
+
 func (c *Config) validate() error {
+	if c.Version == 0 {
+		return errors.New("version: missing; the only version is 1, so start the file with \"version: 1\"")
+	}
 	if c.Version != 1 {
 		return fmt.Errorf("version: want 1, got %d", c.Version)
 	}
@@ -330,8 +377,16 @@ func (c *Config) validate() error {
 	problems = append(problems, c.API.validate()...)
 	problems = append(problems, c.Headers.validate()...)
 	seen := map[string]bool{}
+	outputs := map[string]int{}
 	for i, d := range c.Docs {
 		problems = append(problems, d.validate(i, seen)...)
+		if d.Output != "" {
+			clean := path.Clean(filepath.ToSlash(d.Output))
+			if j, dup := outputs[clean]; dup {
+				problems = append(problems, fmt.Errorf("docs[%d].output: %q is also the output of docs[%d]; the later document would overwrite the earlier one", i, d.Output, j))
+			}
+			outputs[clean] = i
+		}
 	}
 	return errors.Join(problems...)
 }
@@ -369,6 +424,8 @@ func (d Doc) validate(i int, seen map[string]bool) []error {
 		problems = append(problems, at("output", "required"))
 	} else if outsideModule(d.Output) {
 		problems = append(problems, at("output", "must be a path inside the module directory"))
+	} else if ext := strings.ToLower(filepath.Ext(d.Output)); ext != ".yaml" && ext != ".yml" {
+		problems = append(problems, at("output", fmt.Sprintf("%q must end in .yaml or .yml: the document is written there, over whatever the file is", d.Output)))
 	}
 	if d.Info.Title == "" {
 		problems = append(problems, at("info.title", "required"))

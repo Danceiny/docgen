@@ -40,12 +40,17 @@ func buildDoc(d config.Doc, genericTitles []string) error {
 			Schemas: make(openapi3.Schemas),
 		},
 	}
+	warnAboutPatternsThatMatchNothing(d, session.Packages())
 	if err := GenerateModels(doc, d.Models, nil, session); err != nil {
 		return err
 	}
 	applyOverlays(doc, overlays, config.StageAfterModels)
 	if err := GenerateAPIs(doc, d.Services, session); err != nil {
 		return err
+	}
+	if doc.Paths.Len() == 0 {
+		engine.Logger().Warn("the document has no operations: no method of the packages that match \"services\" is an operation",
+			"document", d.Name, "services", d.Services)
 	}
 	applyOverlays(doc, overlays, config.StageAfterAPIs)
 

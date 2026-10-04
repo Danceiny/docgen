@@ -471,6 +471,8 @@ func parseMethod(fn *ast.FuncDecl, pkgAlias map[string]string, pkg *packages.Pac
 		}
 	}
 
+	method.warnAboutMistypedAnnotations()
+
 	// parse the @headerType tag
 	if headerType := ExtractTag(method.Doc, "headerType"); headerType != "" {
 		method.HeaderType = headerType

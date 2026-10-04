@@ -315,6 +315,9 @@ func printOptimizationStats(doc *openapi3.T) {
 		}
 	}
 
+	if operationCount == 0 {
+		engine.Logger().Warn("the public document has no operations: none has the public tag (the tag of the operations that are public is public.tag in the configuration, \"public\" by default)")
+	}
 	engine.Logger().Info("public document optimized",
 		"paths", pathCount, "operations", operationCount, "schemas", schemaCount,
 		"tags", tagCount, "servers", len(doc.Servers))

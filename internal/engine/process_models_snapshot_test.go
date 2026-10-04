@@ -535,3 +535,35 @@ func TestServiceNamesAreConstantsWhereverTheyAreDeclared(t *testing.T) {
 	}
 	assert.Equal(t, 2, unresolved, "the variable and the computed name are reported")
 }
+
+// A mistake that makes an annotation or a directive do nothing is said, with the
+// right spelling when there is one; an annotation that is nothing like a known
+// one belongs to another reader of the comment and is left alone.
+func TestMistypedAnnotationsAndDirectivesAreReported(t *testing.T) {
+	logs := captureLogs(t)
+	pkg := loadFixture(t, "testdata/mistakes")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "snapshot", Version: "mistakes"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+	FindServiceImplementations(pkg)
+
+	guesses := map[string]string{} // annotation -> what it should be
+	types := map[string]string{}   // type -> the mistake in its directive
+	for _, rec := range logs.records {
+		if rec.Level != slog.LevelWarn {
+			continue
+		}
+		attrs := attrsOf(rec)
+		switch {
+		case attrs["annotation"] != "":
+			guesses[attrs["annotation"]] = attrs["didYouMean"]
+		case attrs["type"] != "":
+			types[attrs["type"]] = rec.Message
+		}
+	}
+	assert.Equal(t, map[string]string{"@respone": "@response", "@Tags": "@tags"}, guesses,
+		"@auth is nothing like a known annotation and belongs to another reader of the comment")
+	assert.Contains(t, types["Spaced"], "no space after the slashes")
+	assert.Contains(t, types["Bogus"], "scope that is not public, internal or hidden")
+	assert.NotContains(t, types, "Fine")
+}

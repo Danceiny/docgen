@@ -102,6 +102,11 @@ func TestParseRejects(t *testing.T) {
 	}{
 		{"unknown key", replace("audience: internal", "audience: internal\n    audiance: x"), "audiance"},
 		{"wrong version", replace("version: 1\n", "version: 2\n"), "want 1, got 2"},
+		{"missing version", replace("version: 1\n", ""), `start the file with "version: 1"`},
+		{"an output that is not a document", replace("docs/api/api.yaml", "go.mod"), "must end in .yaml or .yml"},
+		{"two documents with one output", replace("docs/api/openapi.yaml", "docs/api/api.yaml"), "is also the output of docs[0]"},
+		{"two documents with one output, spelled differently", replace("docs/api/openapi.yaml", "docs/./api/../api/api.yaml"), "is also the output of docs[0]"},
+		{"a second YAML document", valid + "---\nversion: 1\n", "second YAML document"},
 		{"no docs", "version: 1\ndocs: []\n", "at least one document"},
 		{"missing name", replace("name: internal", "name: \"\""), "docs[0].name: required"},
 		{"duplicate name", replace("name: public", "name: internal"), "duplicate document name"},
@@ -345,7 +350,7 @@ func TestParseRejectsBadErrors(t *testing.T) {
 		{"prefix without a trailing dot", replace("example.com.shop.errors.\n", "example.com.shop.errors\n"), "must name a package and end in a dot"},
 		{"prefix that is only a dot", replace("example.com.shop.errors.\n", "\".\"\n"), "must name a package and end in a dot"},
 		{"prefix without a file", replace("  file: build/errors.json\n", ""), "has no effect without errors.file"},
-		{"unknown key", replace("  file:", "  path: x\n  file:"), "field path not found"},
+		{"unknown key", replace("  file:", "  path: x\n  file:"), `unknown key "path"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse([]byte(tc.yaml))
@@ -404,7 +409,7 @@ func TestParseRejectsBadOverlays(t *testing.T) {
 		{"unknown stage", replace("stage: after_apis", "stage: before_prune"), `docs[0].overlay[1].stage: want "after_models" or "after_apis", got "before_prune"`},
 		{"no stage", replace("{file: build/late.yaml, stage: after_apis}", "{file: build/late.yaml}"), `docs[0].overlay[1].stage: want "after_models"`},
 		{"the same file at the same stage twice", replace("build/late.yaml, stage: after_apis", "build/overlay.yaml, stage: after_models"), "build/overlay.yaml is already applied at after_models"},
-		{"unknown key", replace("{file: build/overlay.yaml,", "{path: x, file: build/overlay.yaml,"), "field path not found"},
+		{"unknown key", replace("{file: build/overlay.yaml,", "{path: x, file: build/overlay.yaml,"), `unknown key "path"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse([]byte(tc.yaml))
@@ -494,7 +499,7 @@ func TestParseRejectsBadAPIAndResponseSettings(t *testing.T) {
 		{"a status out of range", replace(`"401"`, `"600"`), `response.default_statuses["600"]`},
 		{"the status every operation has anyway", replace(`"401"`, `"200"`), `response.default_statuses["200"]`},
 		{"a status with no description", replace("401\": Unauthorized", `401": ""`), "description required"},
-		{"unknown envelope key", replace("{code: status,", "{extra: x, code: status,"), "field extra not found"},
+		{"unknown envelope key", replace("{code: status,", "{extra: x, code: status,"), `unknown key "extra"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse([]byte(tc.yaml))
@@ -551,7 +556,7 @@ func TestParseRejectsBadPublicSections(t *testing.T) {
 		{"a public section on an internal document", replace("audience: public", "audience: internal"), "only a document of the public audience has a public section"},
 		{"an empty hidden prefix", replace("[Internal, Private]", `["", Private]`), "docs[0].hide_type_prefixes[0]: must not be empty"},
 		{"an empty strip string", replace(`[".com", "staff"]`, `[".com", ""]`), "docs[0].public.strip_tags_containing[1]: must not be empty"},
-		{"an unknown public key", replace("errors_last: true", "errors_last: true\n      colour: red"), "field colour not found"},
+		{"an unknown public key", replace("errors_last: true", "errors_last: true\n      colour: red"), `unknown key "colour"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := Parse([]byte(tc.yaml))

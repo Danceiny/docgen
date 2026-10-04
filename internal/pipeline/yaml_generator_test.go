@@ -88,3 +88,20 @@ func TestCheckSchemasHaveNoCycles(t *testing.T) {
 		t.Fatalf("a shared schema is not a cycle: %v", err)
 	}
 }
+
+// A reference to the type "unknown" is what an operation that takes or returns a
+// map, a list of lists or another unnamed type gets; naming a package to add to
+// "models" would send the reader the wrong way.
+func TestMissingReferenceToAnUnnamedTypeSaysSo(t *testing.T) {
+	op := openapi3.NewOperation()
+	op.RequestBody = &openapi3.RequestBodyRef{Value: openapi3.NewRequestBody().WithJSONSchemaRef(
+		openapi3.NewSchemaRef("#/components/schemas/unknown", nil))}
+	paths := openapi3.NewPaths()
+	paths.Set("/api/shape/q", &openapi3.PathItem{Post: op})
+	doc := &openapi3.T{OpenAPI: "3.0.0", Paths: paths, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+
+	err := normalizeLocalSchemaRefs(doc)
+	if err == nil || !strings.Contains(err.Error(), "not a named type of the module") || strings.Contains(err.Error(), `pattern of "models"`) {
+		t.Fatalf("error = %v", err)
+	}
+}

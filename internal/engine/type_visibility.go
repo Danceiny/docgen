@@ -3,6 +3,7 @@ package engine
 import (
 	"go/ast"
 	"go/types"
+	"regexp"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -105,6 +106,32 @@ func (p *TypeParser) referenceHidden(expr ast.Expr, fk string, ctx *ParseContext
 	}
 	last := fk[strings.LastIndex(fk, ".")+1:]
 	return shouldHideByDefault(last, p.audience)
+}
+
+// spacedDirective matches a comment that was meant to be an //apidoc: directive
+// and has a space after the slashes, which makes it an ordinary comment.
+var spacedDirective = regexp.MustCompile(`^//\s+apidoc:`)
+
+// warnAboutDirectiveMistakes reports the two mistakes in an //apidoc: directive
+// that make it do nothing or something else, without a word: a space after the
+// slashes, and a scope that is none of the known ones.
+func (p *TypeParser) warnAboutDirectiveMistakes(spec *ast.TypeSpec, decl *ast.GenDecl) {
+	for _, doc := range typeDocs(spec, decl) {
+		for _, c := range doc.List {
+			if spacedDirective.MatchString(c.Text) {
+				Logger().Warn("write the directive with no space after the slashes, //apidoc:...; as written it is an ordinary comment and is ignored",
+					"type", spec.Name.Name, "at", p.at(spec))
+			}
+		}
+	}
+	if v := declaredVisibility(spec, decl); v != nil {
+		switch v.Scope {
+		case "public", "internal", "hidden", "custom":
+		default:
+			Logger().Warn("the //apidoc: directive of a type has a scope that is not public, internal or hidden, so the type is shown as if it had none",
+				"scope", v.Scope, "type", spec.Name.Name, "at", p.at(spec))
+		}
+	}
 }
 
 // declarationHidden reports whether a type declaration is hidden from the

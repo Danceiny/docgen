@@ -3,6 +3,10 @@ package engine
 import (
 	"go/ast"
 	"go/types"
+	"regexp"
+	"strings"
+
+	"github.com/Danceiny/docgen/internal/suggest"
 )
 
 type Method struct {
@@ -40,6 +44,43 @@ func (m *Method) warnUnmatchedParamAnnotations(fields []*ast.Field) {
 		if !known[name] {
 			Logger().Warn("@param names a parameter that the method does not have, ignoring it; name a Go parameter, or param1, param2 and so on by position",
 				"method", m.Name, "param", name, "at", m.Pos)
+		}
+	}
+}
+
+// knownAnnotations are the annotations of a method that docgen reads.
+var knownAnnotations = []string{"apidoc", "autowire", "desc", "doc", "folder", "generic", "headerType", "method", "param", "path", "permission", "response", "tags"}
+
+// annotationLine matches a line that starts an annotation: @name:
+var annotationLine = regexp.MustCompile(`^@([A-Za-z][A-Za-z0-9]*):`)
+
+// warnAboutMistypedAnnotations reports an annotation that is not one docgen
+// reads but is one letter away from one that it does, @respone or @Response.
+// Comments carry annotations for other readers too (a router has its own), so an
+// annotation that is not close to any known one is left alone.
+func (m *Method) warnAboutMistypedAnnotations() {
+	for _, line := range strings.Split(m.Doc, "\n") {
+		match := annotationLine.FindStringSubmatch(strings.TrimSpace(line))
+		if match == nil {
+			continue
+		}
+		name := match[1]
+		known := false
+		for _, k := range knownAnnotations {
+			if name == k {
+				known = true
+			}
+		}
+		if known {
+			continue
+		}
+		// One edit, not two: @auth is two from @path and is somebody else's.
+		guess := suggest.ClosestWithin(name, knownAnnotations, 1)
+		if guess == "" {
+			guess = suggest.ClosestWithin(strings.ToLower(name), knownAnnotations, 1)
+		}
+		if guess != "" {
+			Logger().Warn("annotation is not one docgen reads; it is ignored", "annotation", "@"+name, "didYouMean", "@"+guess, "method", m.Name, "at", m.Pos)
 		}
 	}
 }

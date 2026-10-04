@@ -4,7 +4,10 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/Danceiny/docgen/internal/config"
 	"github.com/Danceiny/docgen/internal/engine"
+
+	"golang.org/x/tools/go/packages"
 )
 
 // getRelativePath returns a package path relative to the module path.
@@ -22,6 +25,40 @@ func compilePatterns(patterns []string) []*regexp.Regexp {
 		res = append(res, regexp.MustCompile("^"+strings.ReplaceAll(quoted, `\*`, ".*")+"$"))
 	}
 	return res
+}
+
+// unmatchedPatterns returns the patterns that match no package of the module.
+func unmatchedPatterns(pkgs []*packages.Package, patterns []string) []string {
+	var unmatched []string
+	for _, pattern := range patterns {
+		compiled := compilePatterns([]string{pattern})
+		matched := false
+		for _, pkg := range pkgs {
+			if matchesAnyPattern(getRelativePath(pkg.ID), compiled) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			unmatched = append(unmatched, pattern)
+		}
+	}
+	return unmatched
+}
+
+// warnAboutPatternsThatMatchNothing says so for each pattern of a document that
+// no package of the module matches: it is almost always a mistake, and the
+// document is silently empty because of it.
+func warnAboutPatternsThatMatchNothing(d config.Doc, pkgs []*packages.Package) {
+	for _, field := range []struct {
+		name     string
+		patterns []string
+	}{{"models", d.Models}, {"services", d.Services}} {
+		for _, pattern := range unmatchedPatterns(pkgs, field.patterns) {
+			engine.Logger().Warn("a pattern matches no package of the module; patterns are matched against the package path relative to the module, so */service does not match a package service at the module root",
+				"document", d.Name, "list", field.name, "pattern", pattern)
+		}
+	}
 }
 
 // matchesAnyPattern reports whether the path matches one of the patterns.
