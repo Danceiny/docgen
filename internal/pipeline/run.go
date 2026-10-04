@@ -21,6 +21,10 @@ import (
 // otherwise. A run generates one configuration at a time.
 var rootDir, outDir string
 
+// legacySchemaShapes is compat.legacy_schema_shapes of the configuration being
+// run.
+var legacySchemaShapes bool
+
 // Options selects what Run generates.
 type Options struct {
 	// Dir is the root of the module to document; it must contain go.mod.
@@ -47,6 +51,7 @@ func Run(opts Options) error {
 		return err
 	}
 	rootDir, outDir = opts.Dir, opts.Dir
+	legacySchemaShapes = opts.Config.Compat.LegacySchemaShapes
 	if opts.OutputDir != "" {
 		outDir = opts.OutputDir
 	}

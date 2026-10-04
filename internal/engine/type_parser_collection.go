@@ -32,17 +32,59 @@ func (p *TypeParser) parseMap(expr *ast.MapType, ctx *ParseContext) *openapi3.Sc
 	if valueSchema == nil {
 		valueSchema = defaultSchemaRef()
 	}
+	additional := additionalPropertiesOf(valueSchema)
+	if settings.CompatLegacySchemaShapes {
+		// kin-openapi writes the flag and not the schema when both are set, which
+		// is how documents always lost the type of the values of a map.
+		additional = openapi3.AdditionalProperties{Has: boolPtr(true), Schema: valueSchema}
+	}
 	return &openapi3.SchemaRef{
 		Value: &openapi3.Schema{
 			Type:                 &openapi3.Types{"object"},
-			AdditionalProperties: openapi3.AdditionalProperties{Has: boolPtr(true), Schema: valueSchema},
+			AdditionalProperties: additional,
 		},
 	}
+}
+
+// additionalPropertiesOf describes the values of a map: the schema of the value,
+// or just true when it is any value, which says the same as the empty schema in
+// fewer words.
+func additionalPropertiesOf(value *openapi3.SchemaRef) openapi3.AdditionalProperties {
+	if isAnyValue(value) {
+		return openapi3.AdditionalProperties{Has: boolPtr(true)}
+	}
+	return openapi3.AdditionalProperties{Schema: value}
+}
+
+// isAnyValue reports whether a schema says nothing about a value: it has no type
+// and no shape, or it is the placeholder of a schema that was never filled in.
+func isAnyValue(ref *openapi3.SchemaRef) bool {
+	if ref == nil || ref.Value == nil {
+		return true
+	}
+	if ref.Ref != "" {
+		return false
+	}
+	v := ref.Value
+	if isDefaultSchema(v) {
+		return true
+	}
+	return v.Type == nil && len(v.Properties) == 0 && len(v.AnyOf) == 0 && len(v.OneOf) == 0 &&
+		len(v.AllOf) == 0 && v.Items == nil && len(v.Enum) == 0 && v.AdditionalProperties.Schema == nil &&
+		v.AdditionalProperties.Has == nil
 }
 
 func boolPtr(v bool) *bool { return &v }
 
 func (p *TypeParser) parseArray(expr *ast.ArrayType, ctx *ParseContext) *openapi3.SchemaRef {
+	if !settings.CompatLegacySchemaShapes && p.isByteSlice(expr) {
+		// encoding/json writes a slice of bytes as a base64 string.
+		return &openapi3.SchemaRef{Value: &openapi3.Schema{
+			Type:     &openapi3.Types{openapi3.TypeString},
+			Format:   "byte",
+			Nullable: isNullableFromField(ctx.Field),
+		}}
+	}
 	ctx2 := *ctx
 	if p.referenceHidden(expr.Elt, p.generateTypeKey(expr.Elt), &ParseContext{}) {
 		return nil // a list of a type that the document hides
@@ -145,6 +187,21 @@ func (p *TypeParser) isFuncOrChan(expr ast.Expr) bool {
 		return true
 	}
 	return false
+}
+
+// isByteSlice reports whether a type is a slice, not an array, of bytes, or of a
+// type whose kind is that of a byte: the slices that encoding/json writes as a
+// string.
+func (p *TypeParser) isByteSlice(expr *ast.ArrayType) bool {
+	if expr.Len != nil || p.pkg == nil || p.pkg.TypesInfo == nil {
+		return false
+	}
+	elem := p.pkg.TypesInfo.TypeOf(expr.Elt)
+	if elem == nil {
+		return false
+	}
+	basic, ok := elem.Underlying().(*types.Basic)
+	return ok && basic.Kind() == types.Uint8
 }
 
 // isTypeParam reports whether the type expression is a type parameter of a

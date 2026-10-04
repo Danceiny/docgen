@@ -429,6 +429,12 @@ func slimPropertiesWithVisited(doc *openapi3.T, rootRef *openapi3.SchemaRef, vis
 		root.Items = slimChild(doc, root.Items, visited)
 	}
 
+	// the values of a map; documents generated before they were written are
+	// left as they were
+	if !legacySchemaShapes && root.AdditionalProperties.Schema != nil {
+		root.AdditionalProperties.Schema = slimChild(doc, root.AdditionalProperties.Schema, visited)
+	}
+
 	// AllOf
 	for i, subSchema := range root.AllOf {
 		if subSchema != nil {

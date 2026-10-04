@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"sort"
 	"testing"
 
@@ -62,6 +63,23 @@ func TestFieldShapesAreReadAsEncodingJSONReadsThem(t *testing.T) {
 		assert.Empty(t, anything[name].Value.AnyOf, name)
 	}
 	assert.Nil(t, anything["list"].Value.Items.Value.Type, "the items of a list of any are any value")
+
+	collections := doc.Components.Schemas[fieldShapesKey+"Collections"].Value.Properties
+	tags := collections["tags"].Value.AdditionalProperties
+	require.NotNil(t, tags.Schema, "the values of a map have their schema")
+	assert.True(t, tags.Schema.Value.Type.Is("string"))
+	assert.Equal(t, fieldShapesKey+"Base", collections["owners"].Value.AdditionalProperties.Schema.Value.Title)
+	any := collections["any"].Value.AdditionalProperties
+	assert.Nil(t, any.Schema, "a map of any is any value, which is just true")
+	require.NotNil(t, any.Has)
+	assert.True(t, *any.Has)
+	for _, name := range []string{"data", "raw"} {
+		assert.True(t, collections[name].Value.Type.Is("string"), "%s is written as a string by encoding/json", name)
+		assert.Equal(t, "byte", collections[name].Value.Format, name)
+	}
+	assert.True(t, collections["hash"].Value.Type.Is("array"), "an array of bytes is an array of numbers")
+	assert.True(t, collections["hash"].Value.Items.Value.Type.Is("integer"))
+	assert.True(t, collections["one"].Value.Type.Is("integer"), "a byte is a number")
 }
 
 // legacy_schema_shapes keeps what documents generated before the fix have.
@@ -75,4 +93,11 @@ func TestFieldShapesOfLegacyDocuments(t *testing.T) {
 	anything := doc.Components.Schemas[fieldShapesKey+"Anything"].Value.Properties
 	assert.True(t, anything["any"].Value.Type.Is("object"), "any is an object")
 	assert.Len(t, anything["empty"].Value.AnyOf, 3, "interface{} is one of three types")
+
+	collections := doc.Components.Schemas[fieldShapesKey+"Collections"].Value.Properties
+	encoded, err := json.Marshal(collections["tags"].Value)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"type":"object","additionalProperties":true}`, string(encoded), "a map has lost the type of its values")
+	assert.True(t, collections["data"].Value.Type.Is("array"), "a slice of bytes is an array of strings")
+	assert.True(t, collections["one"].Value.Type.Is("string"), "a byte is a string")
 }

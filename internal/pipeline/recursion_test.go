@@ -304,3 +304,51 @@ func TestAPackageNameThatIsNotTheLastElementOfItsPath(t *testing.T) {
 	assert.Equal(t, "#/components/schemas/example.com.pkgnames.proto.v2.Reply", answer.RequestBody.Value.Content.Get("application/json").Schema.Ref)
 	assert.Equal(t, "#/components/schemas/example.com.pkgnames.model.Resp", responseSchema(t, doc, "/api/shop/answer").Ref)
 }
+
+const mapsPrefix = "example.com.maps.m."
+
+// The values of a map are in the document: a reference to the component of a
+// struct, the schema of anything else, and just true for any value.
+func TestTheValuesOfAMapAreDescribed(t *testing.T) {
+	for _, name := range []string{"internal", "public"} {
+		t.Run(name, func(t *testing.T) {
+			doc := generateFixture(t, "testdata/maps", name)
+			pet := doc.Components.Schemas[mapsPrefix+"Pet"]
+			require.NotNil(t, pet)
+			props := pet.Value.Properties
+
+			tags := props["tags"].Value.AdditionalProperties
+			require.NotNil(t, tags.Schema, "tags: the values have a schema")
+			assert.True(t, tags.Schema.Value.Type.Is("string"))
+
+			owners := props["owners"].Value.AdditionalProperties
+			require.NotNil(t, owners.Schema, "owners: the values have a schema")
+			if name == "internal" {
+				assert.Equal(t, "#/components/schemas/"+mapsPrefix+"Owner", owners.Schema.Ref, "a struct is a reference")
+			} else {
+				assert.Contains(t, propertyNames(owners.Schema), "name", "the public document writes a type out where it is used")
+			}
+
+			extra := props["extra"].Value.AdditionalProperties
+			assert.Nil(t, extra.Schema, "a map of any says no more than true")
+			require.NotNil(t, extra.Has)
+			assert.True(t, *extra.Has)
+
+			photo := props["photo"].Value
+			assert.True(t, photo.Type.Is("string"), "a slice of bytes is written as a string")
+			assert.Equal(t, "byte", photo.Format)
+		})
+	}
+}
+
+// compat.legacy_schema_shapes keeps the documents that were generated before.
+func TestLegacySchemaShapesKeepTheMapsAsTheyWere(t *testing.T) {
+	doc := generateFixtureWith(t, "testdata/maps", "docgen-legacy.yaml", "internal")
+	props := doc.Components.Schemas[mapsPrefix+"Pet"].Value.Properties
+
+	owners := props["owners"].Value.AdditionalProperties
+	assert.Nil(t, owners.Schema, "the values of a map are not in the document")
+	require.NotNil(t, owners.Has)
+	assert.True(t, *owners.Has)
+	assert.True(t, props["photo"].Value.Type.Is("array"), "a slice of bytes is an array of strings")
+}

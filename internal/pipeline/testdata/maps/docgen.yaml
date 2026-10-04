@@ -1,0 +1,14 @@
+version: 1
+docs:
+  - name: internal
+    audience: internal
+    output: out/internal.yaml
+    info: {title: Maps, version: 0.0.1}
+    models: ["m"]
+    services: ["s"]
+  - name: public
+    audience: public
+    output: out/public.yaml
+    info: {title: Maps, version: 0.0.1}
+    models: ["m"]
+    services: ["s"]

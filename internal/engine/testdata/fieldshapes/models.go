@@ -53,3 +53,14 @@ type Anything struct {
 	Empty interface{} `json:"empty"`
 	List  []any       `json:"list"`
 }
+
+// Collections has maps and slices of bytes.
+type Collections struct {
+	Tags   map[string]string `json:"tags"`
+	Owners map[string]Base   `json:"owners"`
+	Any    map[string]any    `json:"any"`
+	Data   []byte            `json:"data"`
+	Raw    []uint8           `json:"raw"`
+	Hash   [4]byte           `json:"hash"`
+	One    byte              `json:"one"`
+}

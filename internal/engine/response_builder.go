@@ -124,8 +124,13 @@ func getBasicTypeSchema(name string) *openapi3.Schema {
 	if s := settings.TypeMap[name]; s != nil {
 		return s
 	}
-	if name == "any" && !settings.CompatLegacySchemaShapes {
-		return anySchema()
+	if !settings.CompatLegacySchemaShapes {
+		switch name {
+		case "any":
+			return anySchema()
+		case "byte":
+			return BasicTypeSchemas["uint8"] // a byte on its own is a number in JSON
+		}
 	}
 	return BasicTypeSchemas[name]
 }

@@ -1,0 +1,12 @@
+# The same module read as documents generated before the values of maps were written
+# have always read it.
+version: 1
+compat:
+  legacy_schema_shapes: true
+docs:
+  - name: internal
+    audience: internal
+    output: out/legacy.yaml
+    info: {title: Maps, version: 0.0.1}
+    models: ["m"]
+    services: ["s"]
