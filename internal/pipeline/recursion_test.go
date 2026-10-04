@@ -209,6 +209,11 @@ func TestTheResultOfAnOperationKeepsItsShape(t *testing.T) {
 
 	paged := responseSchema(t, doc, "/api/shop/paged")
 	assert.Equal(t, "#/components/schemas/example.com.results.m.Page", paged.Ref)
+
+	for _, path := range []string{"/api/shop/anything", "/api/shop/whatever"} {
+		anything := responseSchema(t, doc, path)
+		assert.Nil(t, anything.Value.Type, "%s: an interface holds any JSON value", path)
+	}
 }
 
 // compat.legacy_operation_types keeps the documents that were generated before
@@ -221,7 +226,7 @@ func TestLegacyOperationTypesKeepTheOldResults(t *testing.T) {
 	assert.Equal(t, product, responseSchema(t, doc, "/api/shop/list").Ref, "a list is its element")
 	assert.Equal(t, product, responseSchema(t, doc, "/api/shop/pointers").Ref)
 
-	for _, path := range []string{"/api/shop/counts", "/api/shop/paged"} {
+	for _, path := range []string{"/api/shop/counts", "/api/shop/paged", "/api/shop/anything"} {
 		response := doc.Paths.Value(path).Post.Responses.Value("200")
 		require.NotNil(t, response, path)
 		assert.Nil(t, response.Value.Content.Get("application/json"), "%s: a map and a generic type have no content", path)

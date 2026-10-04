@@ -33,3 +33,9 @@ func (Service) Counts(ctx context.Context, req *m.Req) (map[string]int, error) {
 
 // Paged returns a generic page.
 func (Service) Paged(ctx context.Context, req *m.Req) (*m.Page[m.Product], error) { return nil, nil }
+
+// Anything returns an interface.
+func (Service) Anything(ctx context.Context, req *m.Req) (interface{}, error) { return nil, nil }
+
+// Whatever returns any.
+func (Service) Whatever(ctx context.Context, req *m.Req) (any, error) { return nil, nil }

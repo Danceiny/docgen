@@ -238,12 +238,19 @@ func parseTypeExpr(expr ast.Expr, currentPkgPath string, importAlias map[string]
 		fullKey := formatComponentKey(parseSelectorExpr(t, importAlias))
 		desc = &TypeDescriptor{FullKey: fullKey}
 
-	case *ast.MapType, *ast.InterfaceType:
-		// An object: what a map holds is not described, as in a field of a struct.
+	case *ast.MapType:
+		// An object: what a map holds is not described.
 		if settings.CompatLegacyOperationTypes {
 			return &TypeDescriptor{FullKey: "unknown"}
 		}
 		desc = &TypeDescriptor{FullKey: "object"}
+
+	case *ast.InterfaceType:
+		// An interface holds whatever JSON value its dynamic type writes.
+		if settings.CompatLegacyOperationTypes {
+			return &TypeDescriptor{FullKey: "unknown"}
+		}
+		desc = &TypeDescriptor{FullKey: "any"}
 
 	case *ast.IndexExpr:
 		// An instantiated generic type, Page[Order]: the generic type itself,
