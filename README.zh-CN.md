@@ -61,13 +61,15 @@ docs:
 ```
 
 然后在该目录运行 `docgen`。模式匹配的是相对于模块路径的包路径；`*` 匹配任意一段字符（包括斜杠），其余字符只匹配自身。
+所以 `*/service` 匹配 `pet/service` 和 `shop/pet/service`，但不匹配模块根目录下的包 `service`：扁平的目录结构要写
+`services: ["service"]`（或两个都写）。没有匹配到任何包的模式会被报告，否则它所属的文档会悄悄地变空。
 
 ## docgen 找什么
 
 ### 服务与接口
 
-**服务**是带有 `Name() string` 方法的 struct，该方法返回字符串字面量或常量。服务的导出方法就是**接口**，
-但 `Name` 本身、标了 `@apidoc: -` 的方法、以及列在 `api.skip_methods` 里的方法除外。
+**服务**是带有 `Name() string` 方法的 struct，该方法返回字符串常量：字面量、模块内任何包里的具名常量或常量表达式。
+服务的导出方法就是**接口**，但 `Name` 本身、标了 `@apidoc: -` 的方法、以及列在 `api.skip_methods` 里的方法除外。
 
 ```go
 type PetService struct{}
@@ -78,19 +80,27 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
 ```
 
 - 第一个参数可以是 `context.Context`，它不进文档。
-- struct（或 struct 指针）参数是**请求体**。其他类型的参数用 `@param` 注解描述。
-- 不是 `error` 的返回值是 **`200` 响应**。`error` 本身不进文档，用 `@response`（见下）。
+- 接下来的参数是**请求**：struct（或 struct 指针）是 JSON 请求体，列表和 map 也是；基本类型的参数是该类型的请求体，
+  除非 `@param` 注解说明它是 query、header、path 或 cookie 参数。只读取 context 之后的第一个参数：
+  方法有更多参数时 docgen 会警告，因为其余的参数在文档里没有位置。
+- 不是 `error` 的返回值是 **`200` 响应**：struct 是指向其组件的引用，列表是元素类型的 `array`，map 是 `object`，
+  `Page[Pet]` 这样实例化的泛型类型是 `Page` 的组件。`error` 本身不进文档，用 `@response`（见下）。
 - 路由是 `<前缀>/<服务名>/<方法名首字母小写>`，所以服务 `pet` 的 `Get` 是 `/api/pet/get`。
-  服务名可以含斜杠（`store/order`）。前缀默认 `/api`，可用 `api.prefix` 修改。
-- 默认 HTTP 方法是 `POST`，用 `@method` 修改。
-- 接口的 tag 依次是：首字母大写的服务名、`@tags`、`@permission`。
+  服务名可以含斜杠（`store/order`）。前缀默认 `/api`，可用 `api.prefix` 修改。`@path` 替换方法名（见下），
+  以服务名开头的名字会被去掉这个前缀，按纯前缀处理：服务 `order` 的 `OrderList` 是 `/api/order/list`，
+  服务 `s` 的 `Scalars` 同理是 `/api/s/calars`；服务名要起得不让任何方法碰巧以它开头。
+- 默认 HTTP 方法是 `POST`，用 `@method` 修改；写了多个方法（`@method: GET, POST`）时每个方法一个接口，
+  id 上加小写的方法名（`pet/get_get`、`pet/get_post`）。OpenAPI 不允许 `GET` 和 `DELETE` 带请求体，
+  但 docgen 仍把这类接口的请求写成请求体，除非该请求类型列在 `request.query` 里，那样就变成 query 参数（见配置）。
+- 接口的 tag 是服务名、`@tags` 里的和 `@permission` 里的，每个都是首字母大写、其余小写（`OAuth` 变成 `Oauth`），去重并排序。
 - summary 是注释的第一行，description 来自 `@desc`。
 
 [`route`](route) 包是路由规则的可执行规格。如果你有自己的路由器，用 `route.Resolve` 测一测它。
 
 ### 方法上的注解
 
-写在方法的注释里，一行一个。
+写在方法的注释里，一行一个。docgen 不认识的注解会被放过，因为别的工具也会读注释；
+与已知注解只差一个字母的（`@respone`、`@Tags`）会被报告。
 
 | 注解 | 含义 |
 |---|---|
@@ -101,7 +111,7 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
 | `@path: /custom` | 替换路由中的方法名。值本身已以前缀开头时，它就是完整路由。 |
 | `@doc: Guide: https://example.com/guide` | 外部文档，形式为 `描述: url`。 |
 | `@response:404,NotFoundErr,text` | 额外的响应：状态码、[错误目录](#错误目录)中某个错误的名字、描述。状态码会与目录核对。 |
-| `@param:query limit int required "how many"` | 不是请求体的参数：`<位置> <名字> <类型> <required\|optional> ["描述"]`，位置为 `query`、`header`、`path` 或 `cookie`。 |
+| `@param:query limit int required "how many"` | 不是请求体的参数：`<位置> <名字> <类型> <required\|optional> ["描述"]`，位置为 `query`、`header`、`path` 或 `cookie`。名字是 Go 参数的名字（或按位置写 `param1`、`param2`……），也是文档里的名字。`path` 参数必须出现在 `@path` 里，如 `/get/{id}`。 |
 | `@headerType: Admin` | 在 `headers.types` 里为该接口选择 header 类型。 |
 | `@apidoc: -` | 该方法不是接口：既不路由（按 `route.Skipped` 的约定），也不进文档。 |
 
@@ -109,11 +119,19 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
 
 `models` 包里的具名类型成为**组件**（`#/components/schemas/<点号化的 import 路径>.<Name>`）。
 
-- 字段名来自 `json` tag。`json:"-"` 和未导出字段被略去。内嵌 struct 会被展开。
-- 字段带 `validate:"required"`、`binding:"required"` 或 `required:"true"` 时为必填。`json:"x,nullable"` 表示可为 null。
+- 字段按 `encoding/json` 的方式读取。名字来自 `json` tag；`json:"-"` 和未导出字段被略去；一次声明多个名字
+  （`Lat, Lng float64`）每个名字都是一个字段，空白字段不是字段。内嵌 struct 会被展开到外层 struct 里，
+  除非它带有 json 名字（``Base `json:"base"` ``），那样它就是该名字的字段。
+- 字段的 `validate` 或 `binding` tag 含有规则 `required`（`validate:"required,email"` 含有），或带 `required:"true"` 时为必填。
+  `json:"x,nullable"` 表示可为 null。
 - `example:"..."` 和 `default:"..."` tag（或 `json:"x,default=..."`）给出字段的示例和默认值。
-- 类型或字段的注释就是它的描述。
-- 为具名类型声明的常量使它成为**枚举**：值和注释列在 `enum` 与描述里。
+- **字段**的注释（在字段上方或行尾）就是它的描述；类型的注释不会用到。类型是组件的字段是 `$ref`，
+  而 OpenAPI 3.0 不允许 `$ref` 旁边有描述，所以内部文档会略去这种字段的注释。
+- 为具名类型声明的常量使它成为**枚举**，不论常量怎样声明（`iota`、移位、表达式）：编译器算出的值列在 `enum` 里，
+  常量的名字和注释列在描述里。类型至少有一个常量用该类型声明（`A Status = iota`）才是枚举；
+  `type Status = string` 只是 `string` 的另一个名字，只有用这个名字声明的常量才让它成为枚举。
+- map 是 `object`，其 `additionalProperties` 是值的 schema（任意值的 map 是 `true`），`any` 和 `interface{}` 是空 schema，
+  字节切片是 base64 `string`，byte 是数字。
 - 直接或经由其他类型包含自身的类型，表现为指向自身的 `$ref`。
 - `time.Time` 是 `date-time` 字符串，`time.Duration` 是 `int64` 纳秒数，与 JSON 的写法一致。要改用 `type_map`。
 
@@ -124,12 +142,15 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
 **类型**上，写在注释里：
 
 ```go
-//apidoc:public                    在公开文档中显示，因此内部文档中也显示
-//apidoc:internal                  仅在内部文档中显示
-//apidoc:hidden                    完全不显示
-//apidoc:public:Active,Pending     枚举：只显示这些值
-//apidoc:public:-Legacy*           枚举：除以 Legacy 开头的值外都显示
+//apidoc:public                           在公开文档中显示，因此内部文档中也显示
+//apidoc:internal                         仅在内部文档中显示
+//apidoc:hidden                           完全不显示
+//apidoc:public:StatusActive,StatusNew    枚举：只显示这些值
+//apidoc:public:-StatusLegacy*            枚举：除以 StatusLegacy 开头的值外都显示
 ```
+
+斜杠后面不能有空格（`// apidoc:hidden` 只是普通注释），枚举的值是**常量的名字**，而不是它们在线上的取值。
+docgen 会对无法读懂的指令发出警告。
 
 **字段**上，写在 struct tag 里：
 
@@ -139,14 +160,20 @@ Beta  string `json:"beta"  apidoc:"public"`     // 仅公开文档
 Cost  int    `json:"cost"  apidoc:"hidden"`     // 完全不显示（`apidoc:"-"` 同）
 ```
 
-公开文档还会去掉名字以 `hide_type_prefixes` 中某个前缀开头的类型，除非它自己的 `//apidoc:` 另有说明。没有注解的内容在所有文档里都显示。
+文档还会去掉名字以它的 `hide_type_prefixes` 中某个前缀开头的类型，除非该类型自己的 `//apidoc:` 另有说明。
+没有注解的内容在所有文档里都显示。
 
-旧形式 `apidoc:"Staff"` 只在 `legacy_field_tokens` 里列了 `Staff` 的文档中显示该字段。
+被隐藏的类型没有 schema，会引用它的东西也没有：该类型的字段、它的列表或 map 的字段、内嵌它的 struct 都会被略去，
+收发它的接口也会被略去（并有警告说明是哪个）。枚举是例外：它会显示，只是值被隐藏。
+
+旧形式 `apidoc:"Staff"` 只在 `legacy_field_tokens` 里列了 `Staff` 的文档中显示该字段。tag 的其他任何值都会让该字段
+在所有文档中被隐藏，docgen 会为此警告：手误和把描述写进了错误的 tag，是以这种方式丢字段的两种常见原因。
 tag `api.header:"X-Request-Id"` 给 header 类型的字段指定它所用的 HTTP header 名。
 
 ## 配置
 
-`docgen.yaml` 是严格的：未知的键、非法的值、无法工作的模式都是指明键名的错误，并且所有问题会一次性报告。
+`docgen.yaml` 是严格的：未知的键（会列出那里有哪些键，以及它多半是哪个键的笔误）、非法的值、写了斜杠的类型键都是指明键名的错误；
+无法解码的键会一起报告，非法的值也是。模块里没有声明的类型被配置键点名，以及没有匹配到任何包的模式，是警告。
 [petstore 的配置](examples/petstore/docgen.yaml)是完整的例子，下面是参考：
 
 ```yaml
@@ -160,8 +187,13 @@ vendor_extensions: false        # 添加 x-apifox-*、x-enum-varnames、x-enum-c
                                 # x-display-name、x-primary-property、x-go-interface
 keep_empty_tags: false          # 保留没有 @tags 的接口上的空 tag
 
+compat:                         # 仅用于旧工具生成的文档，
+  legacy_operation_types: false #   见“此前生成的文档”
+  legacy_schema_shapes: false
+
 type_map:                       # 直接指定某个类型的 schema，不去读它
   example.com.shop.types.ID: {type: string, description: id}
+  example.com.shop.types.IDs: {type: array, items: {type: string}}
   github.com.shopspring.decimal.Decimal: {type: number}
   time.Duration: {type: string, format: duration, example: 1h30m}
 
@@ -174,7 +206,8 @@ request:
     example.com.shop.protocol.UploadReq:
       - {name: file, kind: file, required: true}
       - {name: caption, kind: scalar, scalar_to: string}
-  query:                        # 从 URL query 读取的请求类型：没有请求体
+  query:                        # 从 URL query 读取的请求类型：没有请求体。参数是手写的，
+                                #   对每个收该类型的接口都生效，不会和它的字段核对
     example.com.shop.protocol.ListReq:
       - {name: status, type: string, description: Limit the list}
   runtime_only:                 # 任何 JSON 值都无法满足的绑定
@@ -262,7 +295,7 @@ schemas:
 ## 命令行
 
 ```
-docgen [-C dir] [-config file] [-doc name]... [-check] [-v]
+docgen [-C dir] [-config file] [-doc name]... [-check] [-v] [-cpuprofile file] [-memprofile file]
 docgen -version
 ```
 
@@ -273,9 +306,12 @@ docgen -version
 | `-doc name` | 只生成该名字的文档；可重复。 |
 | `-check` | 生成到临时目录，与磁盘上的文件比较，有不同则以 1 退出。不写任何文件。 |
 | `-v` | 额外记录有助于跟踪一次运行的信息，例如被注解隐藏的每个类型。 |
+| `-cpuprofile file`、`-memprofile file` | 写出 CPU 或内存 profile，用于查找运行为什么慢。 |
 | `-version` | 打印版本。 |
 
-警告输出到标准错误；与代码有关的警告会指出位置。
+警告输出到标准错误；与代码有关的警告会指出位置。警告不会让运行失败：它们说的是源码或配置里有什么东西不起作用，
+或者起的作用和看上去不一样，请把它们当作待办清单。`-check` 比较的是文档的文本，
+并且把换行符被替换成回车加换行的检出（`core.autocrlf`）视为没有过期。
 
 在 CI 里：
 
@@ -283,20 +319,41 @@ docgen -version
 go tool docgen -check
 ```
 
+## 此前生成的文档
+
+docgen 是从一个大型服务的文档生成工具里抽出来的，那些文档已经评审并入库多年。最初的工具有几处做得不对，docgen 修正了它们；
+而拥有这类文档的项目不希望升级把它们重写一遍，所以每个会改变它们的修正都有一个开关，用来保留旧的读法。新项目不应该设置它们。
+
+```yaml
+compat:
+  legacy_operation_types: true
+  legacy_schema_shapes: true
+```
+
+- `legacy_operation_types`：接口的参数和返回值类型按旧方式读取：列表就是它的元素类型（`[]Pet` 是 `Pet`），
+  map、接口和实例化的泛型类型是未知类型，所以它们作为返回值时没有 content。
+- `legacy_schema_shapes`：一次声明多个名字（`Lat, Lng float64`）只有第一个是字段，空白字段是名为 `_` 的属性；
+  带 json 名字的内嵌 struct 被展开；`validate:"required,email"` 不会让字段必填，只有 `validate:"required"` 才会；
+  `any` 是 `object`，`interface{}` 是字符串、整数或对象；枚举的值是用该类型和字面量声明的常量，
+  所以 `iota` 和表达式给出空值，隐式重复类型的常量缺失；map 的值类型丢失（`additionalProperties: true`）；
+  字节切片是字符串数组，byte 是字符串。
+
 ## 已知限制
 
-docgen 还很年轻，它最初服务的那个项目的文档决定了它的很多行为。以下限制已知，后续版本会改变，请不要依赖它们。
+docgen 还很年轻。以下限制已知，后续版本会改变，请不要依赖它们。
 
-- **map 丢失值类型**：`map[string]Pet` 是 `additionalProperties: true`。
-- **枚举从字面量读取。** 用 `iota` 或表达式声明的常量值为空；隐式重复类型的常量块里只列出第一个常量。
-- `[]byte` 是字符串数组（JSON 写的是 base64 字符串），`byte` 是字符串，`json:",string"` 被忽略。
 - **其他模块的类型就地展开**，作为内联 schema 而不是组件；其中包含自身的类型第二次出现时只是一个 `object`。
-  不要把它们用作接口的请求或响应类型：用你模块里的类型包一层。
-- 带描述的引用会就地展开，而不是带同级字段的 `$ref`（OpenAPI 3.0 不允许）；字段的描述被保留，schema 被复制。
-  从未被填充的 schema 上可能出现标记 `pattern: default`。
+  不要把它们用作接口的请求或响应类型：用你模块里的类型包一层。自定义的 marshaler 不会被读取，
+  所以写出来的形式与 Go 形状不同的类型（`net.IP`、`big.Int`、字节数组的 UUID）需要 `type_map` 条目。
+- **公开文档是扁平的**：字段所用的类型就地展开而不是引用，以名字作为 title，只有接口收发的类型才是组件。
+  很深或菱形的类型图会让它变得很大。从未被填充的 schema 上可能出现标记 `pattern: default`。
+- `json:",string"` 被忽略，指针除非写了 `json:"x,nullable"` 否则不可为 null，`json.RawMessage` 是 `string`（它其实可以是任意 JSON）。
 - **泛型按声明文档化**：类型参数类型的字段没有 schema，有多个类型参数的泛型类型不受支持。
-- 文档是 OpenAPI 3.0；kin-openapi 不写 3.1。
+- **query 参数是在 `request.query` 里手写的**，不是从 struct 读取的，对每个收该类型的接口都生效。
+- 类型的注释不是它的描述，内部文档会略去 `$ref` 字段的注释。
 - 接口的请求和响应类型必须声明在匹配 `models` 的包里。
+- 文档是 OpenAPI 3.0；kin-openapi 不写 3.1。
+- 每次运行都会加载并类型检查整个模块（`./...`），模块里任何包无法构建时都会失败，并说明原因。
 
 ## 兼容性
 

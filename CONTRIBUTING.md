@@ -15,7 +15,8 @@ go run ./cmd/docgen -C examples/petstore -check   # the example documents are cu
 ```
 
 `golangci-lint run ./...` (version 2) must report nothing. CI runs all of these
-on Linux and macOS.
+on Linux, macOS and Windows, with the Go that `go.mod` names and, on Linux, the
+newest.
 
 ## The example is a test
 
@@ -49,10 +50,10 @@ a mock.
 - **No dependency without a reason.** The module has few; each one is in
   `THIRD_PARTY_NOTICES.md` with its license text, which `go test ./cmd/docgen`
   checks.
-- **Three dependencies are updated by hand.** kin-openapi writes the YAML,
-  x/tools loads the packages and x/text cases the tags, so a new version of any
-  of them can change the generated documents. Update one in a pull request of its
-  own, with the example documents regenerated, the notices updated and the
+- **Four dependencies are updated by hand.** kin-openapi and yaml.v3 write the
+  YAML, x/tools loads the packages and x/text cases the tags, so a new version of
+  any of them can change the generated documents. Update one in a pull request of
+  its own, with the example documents regenerated, the notices updated and the
   difference in `CHANGELOG.md`. Dependabot leaves them alone for that reason.
 
 ## Commits and pull requests

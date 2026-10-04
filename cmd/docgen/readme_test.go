@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -48,5 +49,46 @@ func TestReadmeExamplesAreValid(t *testing.T) {
 	}
 	if _, err := overlay.Parse([]byte(block(t, readme, "### Overlays", "yaml"))); err != nil {
 		t.Errorf("the overlay: %v", err)
+	}
+}
+
+// yamlKeysOf lists the keys of a configuration type and of the types in it.
+func yamlKeysOf(t reflect.Type, seen map[reflect.Type]bool, keys map[string]bool) {
+	for t.Kind() == reflect.Pointer || t.Kind() == reflect.Slice || t.Kind() == reflect.Map {
+		t = t.Elem()
+	}
+	if t.Kind() != reflect.Struct || seen[t] {
+		return
+	}
+	seen[t] = true
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		name, _, _ := strings.Cut(f.Tag.Get("yaml"), ",")
+		if name == "" || name == "-" {
+			continue
+		}
+		keys[name] = true
+		yamlKeysOf(f.Type, seen, keys)
+	}
+}
+
+// The reference of the configuration is the documentation of the configuration:
+// a key that it does not show is a key nobody learns of.
+func TestReadmeConfigurationShowsEveryKey(t *testing.T) {
+	data, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := block(t, string(data), "## Configuration", "yaml")
+
+	keys := map[string]bool{}
+	yamlKeysOf(reflect.TypeOf(config.Config{}), map[reflect.Type]bool{}, keys)
+	if len(keys) < 40 {
+		t.Fatalf("found only %d keys in the configuration types", len(keys))
+	}
+	for key := range keys {
+		if !strings.Contains(reference, key+":") && !strings.Contains(reference, "{"+key+":") && !strings.Contains(reference, ", "+key+":") {
+			t.Errorf("the configuration reference of the README does not show the key %q", key)
+		}
 	}
 }
