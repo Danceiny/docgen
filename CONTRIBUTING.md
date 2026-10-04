@@ -47,9 +47,11 @@ a mock.
 - **Keep the surface small.** The configuration file, the annotations and the
   package `route` are the public interface; the rest is `internal`. A new
   configuration key needs a validation, a line in the README and a test of both.
-- **No dependency without a reason.** The module has few; each one is in
-  `THIRD_PARTY_NOTICES.md` with its license text, which `go test ./cmd/docgen`
-  checks.
+- **No dependency without a reason, and none newer than needed.** The module has
+  few; each one is in `THIRD_PARTY_NOTICES.md` with its license text, which
+  `go test ./cmd/docgen` checks. What `go.mod` requires is required of everybody
+  who runs docgen with `go tool`, whose own versions are raised to match, so even
+  a test dependency is not updated without a reason.
 - **Four dependencies are updated by hand.** kin-openapi and yaml.v3 write the
   YAML, x/tools loads the packages and x/text cases the tags, so a new version of
   any of them can change the generated documents. Update one in a pull request of

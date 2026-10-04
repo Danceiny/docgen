@@ -18,6 +18,11 @@ updates:
       - dependency-name: golang.org/x/tools
       - dependency-name: golang.org/x/text
       - dependency-name: gopkg.in/yaml.v3
+      # The requirements of this module are requirements of everybody who runs docgen
+      # with `go tool`: the newest version in any go.mod of the graph is the one they
+      # build with. testify is only used by the tests, so it stays at the oldest
+      # version they work with (1.12 also added a dependency on another yaml module).
+      - dependency-name: github.com/stretchr/testify
   - package-ecosystem: github-actions
     directory: /
     schedule:
