@@ -1,8 +1,11 @@
 package config
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -643,9 +646,34 @@ func TestLoadSaysWhatToDoWhenThereIsNoFile(t *testing.T) {
 	if err == nil {
 		t.Fatal("a missing file was loaded")
 	}
-	for _, want := range []string{"read config", "no such file", "-config", "Quick start"} {
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("the error is not about a file that does not exist: %v", err)
+	}
+	for _, want := range []string{"read config", "-config", "Quick start"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the error does not say %q: %v", want, err)
+		}
+	}
+}
+
+func TestOutsideModule(t *testing.T) {
+	cases := map[string]bool{
+		"docs/api/a.yaml":   false,
+		"./docs/a.yaml":     false,
+		"docs/../a.yaml":    false,
+		"..foo/a.yaml":      false, // a directory that starts with two dots is inside
+		"../a.yaml":         true,
+		"docs/../../a.yaml": true,
+		"..":                true,
+		"/etc/passwd":       true,
+	}
+	if runtime.GOOS == "windows" {
+		cases[`C:\a.yaml`] = true
+		cases[`\\server\share\a.yaml`] = true
+	}
+	for p, want := range cases {
+		if got := outsideModule(p); got != want {
+			t.Errorf("outsideModule(%q) = %v, want %v", p, got, want)
 		}
 	}
 }

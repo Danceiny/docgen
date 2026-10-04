@@ -539,9 +539,14 @@ func (d Doc) validateOverlays(at func(field, msg string) error) []error {
 	return problems
 }
 
-// outsideModule reports whether a path from the configuration leaves the module directory.
-func outsideModule(path string) bool {
-	return filepath.IsAbs(path) || strings.HasPrefix(filepath.Clean(path), "..")
+// outsideModule reports whether a path from the configuration leaves the module
+// directory: it is absolute, which on Windows includes a path that starts with a
+// slash and has no drive, or it goes up out of it.
+func outsideModule(p string) bool {
+	slashed := filepath.ToSlash(p)
+	clean := path.Clean(slashed)
+	return filepath.IsAbs(p) || filepath.VolumeName(p) != "" || strings.HasPrefix(slashed, "/") ||
+		clean == ".." || strings.HasPrefix(clean, "../")
 }
 
 func (e Errors) validate() []error {
