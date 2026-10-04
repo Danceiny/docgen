@@ -336,7 +336,7 @@ compat:
   带 json 名字的内嵌 struct 被展开；`validate:"required,email"` 不会让字段必填，只有 `validate:"required"` 才会；
   `any` 是 `object`，`interface{}` 是字符串、整数或对象；枚举的值是用该类型和字面量声明的常量，
   所以 `iota` 和表达式给出空值，隐式重复类型的常量缺失；map 的值类型丢失（`additionalProperties: true`）；
-  字节切片是字符串数组，byte 是字符串。
+  字节切片是字符串数组，byte 是字符串；枚举类型在 `type_map` 里的条目被忽略。
 
 ## 已知限制
 

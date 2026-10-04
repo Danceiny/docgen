@@ -73,7 +73,8 @@ type Settings struct {
 	// first name of a declaration with several, an embedded field that has a json
 	// name flattened, "required" only as the whole of a validate or binding tag,
 	// any as an object and interface{} as one of a string, an integer and an
-	// object, and the values of an enum from the literals of its constants.
+	// object, the values of an enum from the literals of its constants, and an
+	// enum as what its constants make it even when type_map gives its schema.
 	CompatLegacySchemaShapes bool
 	// KeepEmptyTags keeps the empty tags an operation gets from a missing @tags
 	// or @permission; without it they are dropped.

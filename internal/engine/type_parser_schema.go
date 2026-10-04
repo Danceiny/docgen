@@ -11,8 +11,9 @@ func (p *TypeParser) handleSchema(typeSpec *ast.TypeSpec, fullKey string, schema
 	// should the enum be hidden?
 	if shouldHideType(p.pkg, typeSpec, p.audience) {
 		schema = generateHiddenSchema(underlyingType)
-	} else if isEnumType(p.pkg, typeSpec) {
-		// make the enum schema with visibility control
+	} else if isEnumType(p.pkg, typeSpec) && (settings.CompatLegacySchemaShapes || settings.TypeMap[fullKey] == nil) {
+		// make the enum schema with visibility control; a schema that the
+		// configuration gives the type (type_map) is the one it has, as for any other type
 		schema = generateEnumSchemaWithVisibility(p.pkg, typeSpec, underlyingType, p.audience)
 	}
 	p.updateSchemaInDocForce(fullKey, schema)

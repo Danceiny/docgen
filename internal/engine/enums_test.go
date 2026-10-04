@@ -3,6 +3,8 @@ package engine
 import (
 	"testing"
 
+	"github.com/getkin/kin-openapi/openapi3"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,4 +49,36 @@ func TestEnumValuesOfLegacyDocuments(t *testing.T) {
 	assert.Equal(t, []string{"Low="}, enumValues(collectEnumEntries(pkg, "Priority")), "only the first, and its iota is no literal")
 	assert.Equal(t, []string{"Unknown=", "Base=10", "Next="}, enumValues(collectEnumEntries(pkg, "Level")))
 	assert.Equal(t, []string{"NameA=", "NameB=b", "_=skipped"}, enumValues(collectEnumEntries(pkg, "Name")))
+}
+
+// A configuration that gives a type its schema has given it, an enum too: a type
+// whose JSON is its name and not its number says so in type_map. A configuration
+// that keeps legacy_schema_shapes has always had the enum win.
+func TestTypeMapGivesAnEnumItsSchema(t *testing.T) {
+	const key = "github.com.Danceiny.docgen.internal.engine.testdata.enums.Priority"
+	byName := map[string]*openapi3.Schema{key: {Type: &openapi3.Types{"string"}, Description: "the name of the priority"}}
+
+	for _, tc := range []struct {
+		name   string
+		legacy bool
+		want   string
+	}{
+		{"default", false, "string"},
+		{"legacy", true, "integer"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withSettings(t, Settings{TypeMap: byName, CompatLegacySchemaShapes: tc.legacy}, "github.com/Danceiny/docgen")
+			pkg := loadFixture(t, "testdata/enums")
+			doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "enums", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+			defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+			runProcessModelsTasks(t, defers, mergeTasks, doc)
+
+			priority := doc.Components.Schemas[key]
+			require.NotNil(t, priority)
+			assert.True(t, priority.Value.Type.Is(tc.want), "Priority is %v", priority.Value.Type)
+			if tc.want == "string" {
+				assert.Empty(t, priority.Value.Enum, "the schema of type_map has no values it was not given")
+			}
+		})
+	}
 }

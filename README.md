@@ -412,7 +412,7 @@ compat:
   constants declared with the type and a literal, so `iota` and expressions give an
   empty value and a constant that repeats the type implicitly is missing; the values
   of a map are lost (`additionalProperties: true`); a slice of bytes is an array of
-  strings and a byte a string.
+  strings and a byte a string; a `type_map` entry for an enum type is ignored.
 
 ## Known limitations
 

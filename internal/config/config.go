@@ -86,7 +86,8 @@ type Compat struct {
 	// string, an integer or an object where they are any value, and the values of
 	// an enum are the constants that are declared with the type and a literal
 	// (so that a constant declared with iota or an expression has an empty value
-	// and one that repeats the type implicitly is left out).
+	// and one that repeats the type implicitly is left out), and the schema that
+	// type_map gives an enum type is ignored.
 	LegacySchemaShapes bool `yaml:"legacy_schema_shapes"`
 }
 
