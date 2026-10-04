@@ -1,0 +1,112 @@
+{
+  "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotMeta": {
+    "properties": {
+      "source": {
+        "description": "Source identifies the fixture origin.",
+        "example": "fixture",
+        "type": "string"
+      }
+    },
+    "title": "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotMeta",
+    "type": "object",
+    "x-apifox-orders": [
+      "source"
+    ]
+  },
+  "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotOrder": {
+    "properties": {
+      "amount": {
+        "type": "number"
+      },
+      "id": {
+        "type": "string"
+      },
+      "meta": {
+        "properties": {
+          "source": {
+            "description": "Source identifies the fixture origin.",
+            "example": "fixture",
+            "type": "string"
+          }
+        },
+        "title": "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotMeta",
+        "type": "object",
+        "x-apifox-orders": [
+          "source"
+        ]
+      },
+      "status": {
+        "enum": [
+          "pending",
+          "done"
+        ],
+        "title": "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotStatus",
+        "type": "string",
+        "x-apifox-enum": [
+          {
+            "description": "",
+            "name": "SnapshotStatusPending",
+            "value": "pending"
+          },
+          {
+            "description": "",
+            "name": "SnapshotStatusDone",
+            "value": "done"
+          }
+        ],
+        "x-enum-comments": [
+          "",
+          ""
+        ],
+        "x-enum-varnames": [
+          "SnapshotStatusPending",
+          "SnapshotStatusDone"
+        ]
+      },
+      "tags": {
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      }
+    },
+    "title": "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotOrder",
+    "type": "object",
+    "x-apifox-orders": [
+      "id",
+      "status",
+      "amount",
+      "tags",
+      "meta"
+    ]
+  },
+  "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotStatus": {
+    "description": "Enums \n- `SnapshotStatusPending` (`pending`): \n- `SnapshotStatusDone` (`done`): \n",
+    "enum": [
+      "pending",
+      "done"
+    ],
+    "title": "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotStatus",
+    "type": "string",
+    "x-apifox-enum": [
+      {
+        "description": "",
+        "name": "SnapshotStatusPending",
+        "value": "pending"
+      },
+      {
+        "description": "",
+        "name": "SnapshotStatusDone",
+        "value": "done"
+      }
+    ],
+    "x-enum-comments": [
+      "",
+      ""
+    ],
+    "x-enum-varnames": [
+      "SnapshotStatusPending",
+      "SnapshotStatusDone"
+    ]
+  }
+}

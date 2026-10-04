@@ -1,0 +1,49 @@
+package engine
+
+import (
+	"strings"
+	"testing"
+
+	"golang.org/x/tools/go/packages"
+)
+
+func TestValidatePackageGraphFailsClosed(t *testing.T) {
+	t.Run("package error", func(t *testing.T) {
+		err := validatePackageGraph([]*packages.Package{{ID: "broken", PkgPath: "example.com/broken", Errors: []packages.Error{{Msg: "syntax error"}}}})
+		if err == nil {
+			t.Fatal("package load errors must fail closed")
+		}
+	})
+	t.Run("ill typed", func(t *testing.T) {
+		err := validatePackageGraph([]*packages.Package{{ID: "ill", PkgPath: "example.com/ill", IllTyped: true}})
+		if err == nil {
+			t.Fatal("ill-typed packages must fail closed")
+		}
+	})
+}
+
+// A package that does not build says why: the first errors are in the message,
+// at their positions, and so is the package of a dependency that is the cause.
+func TestValidatePackageGraphSaysWhy(t *testing.T) {
+	broken := &packages.Package{ID: "dep", PkgPath: "example.com/dep", IllTyped: true, Errors: []packages.Error{
+		{Pos: "dep.go:3:5", Msg: "undefined: x"},
+		{Pos: "dep.go:4:5", Msg: "undefined: y"},
+		{Pos: "dep.go:5:5", Msg: "undefined: z"},
+		{Pos: "dep.go:6:5", Msg: "undefined: w"},
+	}}
+	user := &packages.Package{ID: "user", PkgPath: "example.com/user", IllTyped: true,
+		Imports: map[string]*packages.Package{"example.com/dep": broken}}
+
+	err := validatePackageGraph([]*packages.Package{user})
+	if err == nil {
+		t.Fatal("a package that imports one that does not build must fail closed")
+	}
+	for _, want := range []string{"example.com/dep", "dep.go:3:5", "undefined: x", "undefined: z", "and 1 more"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error %q does not say %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "undefined: w") {
+		t.Errorf("the error lists more than the first errors: %q", err)
+	}
+}

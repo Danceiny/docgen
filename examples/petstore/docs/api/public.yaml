@@ -1,0 +1,398 @@
+openapi: 3.0.0
+components:
+    schemas:
+        example.com.petstore.pet.domain.Category:
+            properties:
+                children:
+                    description: |-
+                        Children are the more specific categories: dogs have breeds. A type that
+                        contains itself is described once and referred to by name.
+                    items:
+                        $ref: '#/components/schemas/example.com.petstore.pet.domain.Category'
+                    type: array
+                id:
+                    example: 7
+                    format: int64
+                    type: integer
+                name:
+                    example: dog
+                    type: string
+            title: Category
+            type: object
+        example.com.petstore.pet.domain.Pet:
+            properties:
+                bornAt:
+                    example: "2024-01-02T15:04:05Z"
+                    format: date-time
+                    type: string
+                category:
+                    properties:
+                        children:
+                            description: |-
+                                Children are the more specific categories: dogs have breeds. A type that
+                                contains itself is described once and referred to by name.
+                            items:
+                                $ref: '#/components/schemas/example.com.petstore.pet.domain.Category'
+                            type: array
+                        id:
+                            example: 7
+                            format: int64
+                            type: integer
+                        name:
+                            example: dog
+                            type: string
+                    title: Category
+                    type: object
+                fee:
+                    description: Fee is the adoption fee.
+                    example: "12.50"
+                    title: Price
+                    type: string
+                id:
+                    description: ID is assigned when the pet is created.
+                    example: p-1001
+                    type: string
+                name:
+                    description: Name is what the pet is called.
+                    example: Rex
+                    type: string
+                status:
+                    enum:
+                        - available
+                        - reserved
+                        - adopted
+                    title: Status
+                    type: string
+                tags:
+                    description: Tags are free words that help to find the pet.
+                    items:
+                        description: Tags are free words that help to find the pet.
+                        type: string
+                    type: array
+            required:
+                - id
+                - name
+            title: Pet
+            type: object
+        example.com.petstore.pet.protocol.AuthHeader:
+            properties:
+                Authorization:
+                    description: Authorization is "Bearer <token>".
+                    type: string
+            required:
+                - Authorization
+            title: AuthHeader
+            type: object
+        example.com.petstore.pet.protocol.GetPetReq:
+            properties:
+                id:
+                    example: p-1001
+                    type: string
+            required:
+                - id
+            title: GetPetReq
+            type: object
+        example.com.petstore.pet.protocol.ListPetsResp:
+            properties:
+                next:
+                    description: Next is the cursor of the next page; empty when this is the last.
+                    type: string
+                pets:
+                    items:
+                        properties:
+                            bornAt:
+                                example: "2024-01-02T15:04:05Z"
+                                format: date-time
+                                type: string
+                            category:
+                                properties:
+                                    children:
+                                        description: |-
+                                            Children are the more specific categories: dogs have breeds. A type that
+                                            contains itself is described once and referred to by name.
+                                        items:
+                                            $ref: '#/components/schemas/example.com.petstore.pet.domain.Category'
+                                        type: array
+                                    id:
+                                        example: 7
+                                        format: int64
+                                        type: integer
+                                    name:
+                                        example: dog
+                                        type: string
+                                title: Category
+                                type: object
+                            fee:
+                                description: Fee is the adoption fee.
+                                example: "12.50"
+                                title: Price
+                                type: string
+                            id:
+                                description: ID is assigned when the pet is created.
+                                example: p-1001
+                                type: string
+                            name:
+                                description: Name is what the pet is called.
+                                example: Rex
+                                type: string
+                            status:
+                                enum:
+                                    - available
+                                    - reserved
+                                    - adopted
+                                title: Status
+                                type: string
+                            tags:
+                                description: Tags are free words that help to find the pet.
+                                items:
+                                    description: Tags are free words that help to find the pet.
+                                    type: string
+                                type: array
+                        required:
+                            - id
+                            - name
+                        title: Pet
+                        type: object
+                    type: array
+            title: ListPetsResp
+            type: object
+        example.com.petstore.pet.protocol.SearchReq:
+            properties:
+                name:
+                    description: Name is part of the name of the pets to find.
+                    type: string
+            required:
+                - name
+            title: SearchReq
+            type: object
+        example.com.petstore.store.protocol.Order:
+            properties:
+                complete:
+                    description: Complete is true once the pet has left the shelter.
+                    type: boolean
+                customerId:
+                    type: string
+                id:
+                    type: string
+                petId:
+                    type: string
+            title: Order
+            type: object
+        example.com.petstore.store.protocol.PlaceOrderReq:
+            properties:
+                customerId:
+                    type: string
+                note:
+                    description: Note is a message to the shelter.
+                    type: string
+                petId:
+                    type: string
+            required:
+                - customerId
+                - petId
+            title: PlaceOrderReq
+            type: object
+info:
+    title: Petstore API
+    version: 1.0.0
+paths:
+    /api/pet/downloadPhoto:
+        get:
+            operationId: pet/downloadPhoto
+            parameters:
+                - description: The pet whose photo is wanted
+                  in: query
+                  name: petId
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        image/jpeg:
+                            schema:
+                                format: binary
+                                type: string
+                        image/png:
+                            schema:
+                                format: binary
+                                type: string
+                    description: The photo
+                "401":
+                    description: Unauthorized
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        example: 40401
+                                        type: integer
+                                    message:
+                                        example: not found
+                                        type: string
+                                title: NotFoundErr
+                                type: object
+                    description: The pet has no photo
+            summary: DownloadPhoto returns the photo of a pet as an image.
+            tags:
+                - Pet
+                - Public
+    /api/pet/get:
+        post:
+            description: |-
+                Looks a pet up by its id.
+
+                The pet is returned whatever its status.
+            externalDocs:
+                description: Adoption guide
+                url: https://example.com/guides/adoption
+            operationId: pet/get
+            parameters:
+                - description: request headers (Auth)
+                  in: header
+                  name: Headers
+                  required: true
+                  schema:
+                    $ref: '#/components/schemas/example.com.petstore.pet.protocol.AuthHeader'
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/example.com.petstore.pet.protocol.GetPetReq'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.pet.domain.Pet'
+                    description: OK
+                "401":
+                    description: Unauthorized
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        example: 40401
+                                        type: integer
+                                    message:
+                                        example: not found
+                                        type: string
+                                title: NotFoundErr
+                                type: object
+                    description: There is no pet with that id
+            summary: Get returns one pet.
+            tags:
+                - Pet
+                - Public
+    /api/pet/list:
+        get:
+            operationId: pet/list
+            parameters:
+                - description: Limit the list to pets in this state
+                  in: query
+                  name: status
+                  schema:
+                    type: string
+                - description: How many pets a page has
+                  in: query
+                  name: pageSize
+                  schema:
+                    format: int64
+                    type: integer
+                - description: The next of the previous page
+                  in: query
+                  name: cursor
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.pet.protocol.ListPetsResp'
+                    description: OK
+                "401":
+                    description: Unauthorized
+            summary: List returns a page of pets.
+            tags:
+                - Pet
+                - Public
+    /api/pet/search:
+        post:
+            operationId: pet/search
+            parameters:
+                - description: request headers (Auth)
+                  in: header
+                  name: Headers
+                  required: true
+                  schema:
+                    $ref: '#/components/schemas/example.com.petstore.pet.protocol.AuthHeader'
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/example.com.petstore.pet.protocol.SearchReq'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.pet.protocol.ListPetsResp'
+                    description: OK
+                "401":
+                    description: Unauthorized
+            summary: Search finds pets by name.
+            tags:
+                - Pet
+                - Public
+    /api/store/order/place:
+        post:
+            operationId: store/order/place
+            parameters:
+                - description: request headers (Auth)
+                  in: header
+                  name: Headers
+                  required: true
+                  schema:
+                    $ref: '#/components/schemas/example.com.petstore.pet.protocol.AuthHeader'
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/example.com.petstore.store.protocol.PlaceOrderReq'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.store.protocol.Order'
+                    description: OK
+                "401":
+                    description: Unauthorized
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        example: 40901
+                                        type: integer
+                                    message:
+                                        example: conflict
+                                        type: string
+                                title: ConflictErr
+                                type: object
+                    description: The pet is already adopted
+            summary: Place adopts a pet.
+            tags:
+                - Public
+                - Store/Order
+servers:
+    - description: Production
+      url: https://api.example.com

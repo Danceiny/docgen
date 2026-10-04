@@ -1,0 +1,593 @@
+openapi: 3.0.0
+components:
+    schemas:
+        example.com.petstore.errors.ConflictErr:
+            description: ConflictErr
+            properties:
+                code:
+                    example: 40901
+                    type: integer
+                message:
+                    example: conflict
+                    type: string
+            title: example.com.petstore.errors.ConflictErr
+            type: object
+        example.com.petstore.errors.NotFoundErr:
+            description: NotFoundErr
+            properties:
+                code:
+                    example: 40401
+                    type: integer
+                message:
+                    example: not found
+                    type: string
+            title: example.com.petstore.errors.NotFoundErr
+            type: object
+        example.com.petstore.errors.RateLimitErr:
+            description: RateLimitErr
+            properties:
+                code:
+                    example: 42901
+                    type: integer
+                message:
+                    example: too many requests
+                    type: string
+            title: example.com.petstore.errors.RateLimitErr
+            type: object
+        example.com.petstore.pet.domain.Category:
+            properties:
+                children:
+                    description: |-
+                        Children are the more specific categories: dogs have breeds. A type that
+                        contains itself is described once and referred to by name.
+                    items:
+                        $ref: '#/components/schemas/example.com.petstore.pet.domain.Category'
+                    type: array
+                id:
+                    example: 7
+                    format: int64
+                    type: integer
+                name:
+                    example: dog
+                    type: string
+            title: example.com.petstore.pet.domain.Category
+            type: object
+        example.com.petstore.pet.domain.InternalAuditEntry:
+            properties:
+                by:
+                    type: string
+                petId:
+                    type: string
+            title: example.com.petstore.pet.domain.InternalAuditEntry
+            type: object
+        example.com.petstore.pet.domain.Pet:
+            properties:
+                bornAt:
+                    example: "2024-01-02T15:04:05Z"
+                    format: date-time
+                    type: string
+                category:
+                    $ref: '#/components/schemas/example.com.petstore.pet.domain.Category'
+                fee:
+                    $ref: '#/components/schemas/example.com.petstore.pet.domain.Price'
+                id:
+                    description: ID is assigned when the pet is created.
+                    example: p-1001
+                    type: string
+                name:
+                    description: Name is what the pet is called.
+                    example: Rex
+                    type: string
+                notes:
+                    description: Notes are written by the staff and never shown to customers.
+                    type: string
+                status:
+                    $ref: '#/components/schemas/example.com.petstore.pet.domain.Status'
+                tags:
+                    description: Tags are free words that help to find the pet.
+                    items:
+                        description: Tags are free words that help to find the pet.
+                        type: string
+                    type: array
+            required:
+                - id
+                - name
+            title: example.com.petstore.pet.domain.Pet
+            type: object
+        example.com.petstore.pet.domain.Price:
+            description: |-
+                Price is an amount of money in dollars. It is written as a string such as
+                "12.50", not as a number, so that no client rounds it.
+            example: "12.50"
+            title: example.com.petstore.pet.domain.Price
+            type: string
+        example.com.petstore.pet.domain.Status:
+            description: "Enums \n- `StatusAvailable` (`available`): means the pet can be adopted.\n- `StatusReserved` (`reserved`): means the pet is held for a customer.\n- `StatusAdopted` (`adopted`): means the pet has a home.\n"
+            enum:
+                - available
+                - reserved
+                - adopted
+            title: example.com.petstore.pet.domain.Status
+            type: string
+        example.com.petstore.pet.protocol.AuditResp:
+            properties:
+                entries:
+                    items:
+                        $ref: '#/components/schemas/example.com.petstore.pet.domain.InternalAuditEntry'
+                    type: array
+            title: example.com.petstore.pet.protocol.AuditResp
+            type: object
+        example.com.petstore.pet.protocol.AuthHeader:
+            properties:
+                Authorization:
+                    description: Authorization is "Bearer <token>".
+                    type: string
+            required:
+                - Authorization
+            title: example.com.petstore.pet.protocol.AuthHeader
+            type: object
+        example.com.petstore.pet.protocol.CreatePetReq:
+            properties:
+                category:
+                    $ref: '#/components/schemas/example.com.petstore.pet.domain.Category'
+                fee:
+                    $ref: '#/components/schemas/example.com.petstore.pet.domain.Price'
+                name:
+                    type: string
+                tags:
+                    items:
+                        type: string
+                    type: array
+            required:
+                - category
+                - name
+            title: example.com.petstore.pet.protocol.CreatePetReq
+            type: object
+        example.com.petstore.pet.protocol.DownloadPhotoReq:
+            properties:
+                petId:
+                    type: string
+            title: example.com.petstore.pet.protocol.DownloadPhotoReq
+            type: object
+        example.com.petstore.pet.protocol.DownloadPhotoResp:
+            title: example.com.petstore.pet.protocol.DownloadPhotoResp
+            type: object
+        example.com.petstore.pet.protocol.GetPetReq:
+            properties:
+                id:
+                    example: p-1001
+                    type: string
+            required:
+                - id
+            title: example.com.petstore.pet.protocol.GetPetReq
+            type: object
+        example.com.petstore.pet.protocol.ListPetsReq:
+            properties:
+                cursor:
+                    description: Cursor is the Next of the previous page; empty for the first.
+                    type: string
+                pageSize:
+                    default: 20
+                    description: PageSize is how many pets a page has, at most 100.
+                    type: integer
+                status:
+                    $ref: '#/components/schemas/example.com.petstore.pet.domain.Status'
+            title: example.com.petstore.pet.protocol.ListPetsReq
+            type: object
+        example.com.petstore.pet.protocol.ListPetsResp:
+            properties:
+                next:
+                    description: Next is the cursor of the next page; empty when this is the last.
+                    type: string
+                pets:
+                    items:
+                        $ref: '#/components/schemas/example.com.petstore.pet.domain.Pet'
+                    type: array
+            title: example.com.petstore.pet.protocol.ListPetsResp
+            type: object
+        example.com.petstore.pet.protocol.SearchReq:
+            properties:
+                name:
+                    description: Name is part of the name of the pets to find.
+                    type: string
+            required:
+                - name
+            title: example.com.petstore.pet.protocol.SearchReq
+            type: object
+        example.com.petstore.pet.protocol.UploadPhotoReq:
+            title: example.com.petstore.pet.protocol.UploadPhotoReq
+            type: object
+        example.com.petstore.pet.protocol.UploadPhotoResp:
+            properties:
+                url:
+                    type: string
+            title: example.com.petstore.pet.protocol.UploadPhotoResp
+            type: object
+        example.com.petstore.pet.service.ImportReq:
+            properties:
+                pets:
+                    items:
+                        $ref: '#/components/schemas/example.com.petstore.pet.domain.Pet'
+                    type: array
+                source:
+                    description: Where the pets come from, such as the name of a shelter.
+                    type: string
+            required:
+                - pets
+                - source
+            title: example.com.petstore.pet.service.ImportReq
+            type: object
+        example.com.petstore.store.protocol.Order:
+            properties:
+                complete:
+                    description: Complete is true once the pet has left the shelter.
+                    type: boolean
+                customerId:
+                    type: string
+                id:
+                    type: string
+                petId:
+                    type: string
+            title: example.com.petstore.store.protocol.Order
+            type: object
+        example.com.petstore.store.protocol.PlaceOrderReq:
+            properties:
+                customerId:
+                    type: string
+                note:
+                    description: Note is a message to the shelter.
+                    type: string
+                petId:
+                    type: string
+            required:
+                - customerId
+                - petId
+            title: example.com.petstore.store.protocol.PlaceOrderReq
+            type: object
+info:
+    description: Every operation of the petstore service.
+    title: Petstore internal API
+    version: 1.0.0
+paths:
+    /api/pet/audit:
+        post:
+            operationId: pet/audit
+            parameters:
+                - description: request headers (Auth)
+                  in: header
+                  name: Headers
+                  required: true
+                  schema:
+                    $ref: '#/components/schemas/example.com.petstore.pet.protocol.AuthHeader'
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/example.com.petstore.pet.protocol.GetPetReq'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.pet.protocol.AuditResp'
+                    description: OK
+                "401":
+                    description: Unauthorized
+            summary: Audit returns who changed a pet and when.
+            tags:
+                - Pet
+                - Pet:audit
+                - Staff
+    /api/pet/create:
+        post:
+            operationId: pet/create
+            parameters:
+                - description: request headers (Auth)
+                  in: header
+                  name: Headers
+                  required: true
+                  schema:
+                    $ref: '#/components/schemas/example.com.petstore.pet.protocol.AuthHeader'
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/example.com.petstore.pet.protocol.CreatePetReq'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.pet.domain.Pet'
+                    description: OK
+                "401":
+                    description: Unauthorized
+                "429":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        example: 42901
+                                        type: integer
+                                    message:
+                                        example: too many requests
+                                        type: string
+                                title: RateLimitErr
+                                type: object
+                    description: Too many pets created in a short time
+            summary: Create adds a pet.
+            tags:
+                - Pet
+                - Pet:write
+                - Staff
+    /api/pet/downloadPhoto:
+        get:
+            operationId: pet/downloadPhoto
+            parameters:
+                - description: The pet whose photo is wanted
+                  in: query
+                  name: petId
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        image/jpeg:
+                            schema:
+                                format: binary
+                                type: string
+                        image/png:
+                            schema:
+                                format: binary
+                                type: string
+                    description: The photo
+                "401":
+                    description: Unauthorized
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        example: 40401
+                                        type: integer
+                                    message:
+                                        example: not found
+                                        type: string
+                                title: NotFoundErr
+                                type: object
+                    description: The pet has no photo
+            summary: DownloadPhoto returns the photo of a pet as an image.
+            tags:
+                - Pet
+                - Public
+    /api/pet/get:
+        post:
+            description: |-
+                Looks a pet up by its id.
+
+                The pet is returned whatever its status.
+            externalDocs:
+                description: Adoption guide
+                url: https://example.com/guides/adoption
+            operationId: pet/get
+            parameters:
+                - description: request headers (Auth)
+                  in: header
+                  name: Headers
+                  required: true
+                  schema:
+                    $ref: '#/components/schemas/example.com.petstore.pet.protocol.AuthHeader'
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/example.com.petstore.pet.protocol.GetPetReq'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.pet.domain.Pet'
+                    description: OK
+                "401":
+                    description: Unauthorized
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        example: 40401
+                                        type: integer
+                                    message:
+                                        example: not found
+                                        type: string
+                                title: NotFoundErr
+                                type: object
+                    description: There is no pet with that id
+            summary: Get returns one pet.
+            tags:
+                - Pet
+                - Public
+    /api/pet/import:
+        post:
+            operationId: pet/import
+            parameters:
+                - description: request headers (Auth)
+                  in: header
+                  name: Headers
+                  required: true
+                  schema:
+                    $ref: '#/components/schemas/example.com.petstore.pet.protocol.AuthHeader'
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/example.com.petstore.pet.service.ImportReq'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.pet.protocol.ListPetsResp'
+                    description: OK
+                "401":
+                    description: Unauthorized
+            summary: Import adds many pets at once.
+            tags:
+                - Pet
+                - Pet:write
+                - Staff
+    /api/pet/list:
+        get:
+            operationId: pet/list
+            parameters:
+                - description: Limit the list to pets in this state
+                  in: query
+                  name: status
+                  schema:
+                    type: string
+                - description: How many pets a page has
+                  in: query
+                  name: pageSize
+                  schema:
+                    format: int64
+                    type: integer
+                - description: The next of the previous page
+                  in: query
+                  name: cursor
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.pet.protocol.ListPetsResp'
+                    description: OK
+                "401":
+                    description: Unauthorized
+            summary: List returns a page of pets.
+            tags:
+                - Pet
+                - Public
+    /api/pet/search:
+        post:
+            operationId: pet/search
+            parameters:
+                - description: request headers (Auth)
+                  in: header
+                  name: Headers
+                  required: true
+                  schema:
+                    $ref: '#/components/schemas/example.com.petstore.pet.protocol.AuthHeader'
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/example.com.petstore.pet.protocol.SearchReq'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.pet.protocol.ListPetsResp'
+                    description: OK
+                "401":
+                    description: Unauthorized
+            summary: Search finds pets by name.
+            tags:
+                - Pet
+                - Public
+    /api/pet/uploadPhoto:
+        post:
+            operationId: pet/uploadPhoto
+            parameters:
+                - description: request headers (Auth)
+                  in: header
+                  name: Headers
+                  required: true
+                  schema:
+                    $ref: '#/components/schemas/example.com.petstore.pet.protocol.AuthHeader'
+            requestBody:
+                content:
+                    multipart/form-data:
+                        schema:
+                            properties:
+                                caption:
+                                    type: string
+                                file:
+                                    format: binary
+                                    type: string
+                            required:
+                                - file
+                            type: object
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.pet.protocol.UploadPhotoResp'
+                    description: OK
+                "401":
+                    description: Unauthorized
+            summary: UploadPhoto stores a photo of a pet.
+            tags:
+                - Pet
+                - Pet:write
+                - Staff
+    /api/store/order/place:
+        post:
+            operationId: store/order/place
+            parameters:
+                - description: request headers (Auth)
+                  in: header
+                  name: Headers
+                  required: true
+                  schema:
+                    $ref: '#/components/schemas/example.com.petstore.pet.protocol.AuthHeader'
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/example.com.petstore.store.protocol.PlaceOrderReq'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/example.com.petstore.store.protocol.Order'
+                    description: OK
+                "401":
+                    description: Unauthorized
+                "409":
+                    content:
+                        application/json:
+                            schema:
+                                properties:
+                                    code:
+                                        example: 40901
+                                        type: integer
+                                    message:
+                                        example: conflict
+                                        type: string
+                                title: ConflictErr
+                                type: object
+                    description: The pet is already adopted
+            summary: Place adopts a pet.
+            tags:
+                - Public
+                - Store/Order
+servers:
+    - description: Local
+      url: http://localhost:8080

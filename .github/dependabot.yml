@@ -1,0 +1,26 @@
+version: 2
+updates:
+  # Security and maintenance updates of the modules docgen builds on. Three of
+  # them decide what the generated documents look like: kin-openapi writes the
+  # YAML, x/tools loads the packages, x/text cases the tags. A new version of
+  # any of them is a change of the output, so it is made by hand, with the
+  # example documents regenerated and the CHANGELOG written.
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      go-dependencies:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: github.com/getkin/kin-openapi
+      - dependency-name: golang.org/x/tools
+      - dependency-name: golang.org/x/text
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]

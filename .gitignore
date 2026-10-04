@@ -1,0 +1,13 @@
+# a binary built in the repository root
+/docgen
+/dist/
+
+# profiles written by -cpuprofile and -memprofile
+*.prof
+*.pprof
+
+# editors and operating systems
+.idea/
+.vscode/
+*.swp
+.DS_Store

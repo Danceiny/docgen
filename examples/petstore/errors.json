@@ -1,0 +1,5 @@
+[
+  {"name": "NotFoundErr", "code": 40401, "message": "not found", "httpCode": 404},
+  {"name": "ConflictErr", "code": 40901, "message": "conflict", "httpCode": 409},
+  {"name": "RateLimitErr", "code": 42901, "message": "too many requests", "httpCode": 429}
+]
