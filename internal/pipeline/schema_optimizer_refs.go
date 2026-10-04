@@ -12,9 +12,11 @@ func removeUnusedSchemas(doc *openapi3.T, forceKeep []string) {
 	usedSchemas := make(map[string]bool)
 	var queue []string
 
-	// first add the schemas that are always kept
+	// first add the schemas that are always kept, and what they refer to is kept
+	// with them
 	for _, schemaName := range forceKeep {
 		usedSchemas[schemaName] = true
+		queue = append(queue, schemaName)
 	}
 
 	// the schemas the API paths refer to first

@@ -12,11 +12,12 @@ import (
 // parseStruct parses a struct type (the core of it).
 func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi3.SchemaRef {
 	schema := openapi3.NewObjectSchema()
-	fieldCnt := len(st.Fields.List)
+	fields := structFields(st)
+	fieldCnt := len(fields)
 
 	var fieldNames []string // the order of the fields, used for the extension field
 	var requiredFields []string
-	for _, field := range st.Fields.List {
+	for _, field := range fields {
 		field := field // shadow
 
 		// the context of the field
@@ -35,6 +36,9 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 
 		var tagdocGenerics []string
 		genericTypeArg := ExtractGenericTypeArg(field)
+		if genericTypeArg == "T" && p.realTypeNamedT(field.Type) {
+			genericTypeArg = "" // a type of the module that is called T, a field like any other
+		}
 		if genericTypeArg != "" { // parse it automatically, the same as a comment
 			vs := strings.Split(genericTypeArg, ".")
 			suffixKey := vs[len(vs)-1]
@@ -97,9 +101,6 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 			continue
 		}
 
-		// type Example struct {
-		//    A, B, C int // several names in one field is not supported, please do not write this
-		//}
 		if unicode.IsLower(rune(field.Names[0].Name[0])) {
 			continue
 		}
@@ -215,7 +216,7 @@ func (p *TypeParser) extractFieldNamesFromStruct(st *ast.StructType, ctx *ParseC
 
 	var fieldNames []string
 
-	for _, field := range st.Fields.List {
+	for _, field := range structFields(st) {
 		// embedded fields
 		if len(field.Names) == 0 {
 			// the field names of the embedded field, recursively
@@ -239,4 +240,100 @@ func (p *TypeParser) extractFieldNamesFromStruct(st *ast.StructType, ctx *ParseC
 	}
 
 	return fieldNames
+}
+
+// structFields lists the fields of a struct as encoding/json sees them, each
+// with the one name it has: a declaration of several names (Lat, Lng float64)
+// becomes a field for each, a blank name (_) is no field, and an embedded field
+// that has a json name (Base `json:"base"`) is a field of that name, not a
+// flattened one. A configuration that keeps legacy_field_shapes gets what
+// documents always had: the first name of a declaration, and the embedded field
+// flattened.
+func structFields(st *ast.StructType) []*ast.Field {
+	if st == nil || st.Fields == nil {
+		return nil
+	}
+	if settings.CompatLegacyFieldShapes {
+		return st.Fields.List
+	}
+	fields := make([]*ast.Field, 0, len(st.Fields.List))
+	for _, f := range st.Fields.List {
+		switch {
+		case len(f.Names) == 0:
+			if embeddedJSONName(f) != "" {
+				named := *f
+				named.Names = []*ast.Ident{{NamePos: f.Pos(), Name: exported(embeddedTypeName(f.Type))}}
+				fields = append(fields, &named)
+				continue
+			}
+			fields = append(fields, f)
+		case len(f.Names) == 1 && f.Names[0].Name != "_":
+			fields = append(fields, f)
+		default:
+			for _, name := range f.Names {
+				if name.Name == "_" {
+					continue
+				}
+				named := *f
+				named.Names = []*ast.Ident{name}
+				fields = append(fields, &named)
+			}
+		}
+	}
+	return fields
+}
+
+// exported capitalizes a name so that a field made of an embedded type that is
+// not exported is not taken for a field that is not: encoding/json keeps an
+// embedded struct that has a json name whether or not its type is exported.
+func exported(name string) string {
+	if name == "" {
+		return name
+	}
+	return strings.ToUpper(name[:1]) + name[1:]
+}
+
+// embeddedJSONName returns the name a json tag gives an embedded field, or "".
+func embeddedJSONName(f *ast.Field) string {
+	name, _, _ := strings.Cut(getValueFromTag(f, "json"), ",")
+	if name == "-" {
+		return ""
+	}
+	return name
+}
+
+// embeddedTypeName is the name of an embedded field in Go: the name of its type.
+func embeddedTypeName(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.StarExpr:
+		return embeddedTypeName(t.X)
+	case *ast.SelectorExpr:
+		return t.Sel.Name
+	case *ast.IndexExpr:
+		return embeddedTypeName(t.X)
+	case *ast.IndexListExpr:
+		return embeddedTypeName(t.X)
+	case *ast.Ident:
+		return t.Name
+	}
+	return "_"
+}
+
+// realTypeNamedT reports whether a field of type T or *T is of a type that is
+// really called T, which is not what T by convention is, the type parameter of a
+// generic declaration. Such a field is a field like any other.
+func (p *TypeParser) realTypeNamedT(expr ast.Expr) bool {
+	if star, ok := expr.(*ast.StarExpr); ok {
+		expr = star.X
+	}
+	ident, ok := expr.(*ast.Ident)
+	if !ok || ident.Name != "T" || p.pkg == nil || p.pkg.TypesInfo == nil {
+		return false
+	}
+	t := p.pkg.TypesInfo.TypeOf(ident)
+	if t == nil {
+		return false
+	}
+	_, isParam := t.(*types.TypeParam)
+	return !isParam
 }

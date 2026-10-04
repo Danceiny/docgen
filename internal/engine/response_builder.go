@@ -124,7 +124,18 @@ func getBasicTypeSchema(name string) *openapi3.Schema {
 	if s := settings.TypeMap[name]; s != nil {
 		return s
 	}
+	if name == "any" && !settings.CompatLegacyFieldShapes {
+		return anySchema()
+	}
 	return BasicTypeSchemas[name]
+}
+
+// anySchema is the schema of any and of interface{}: the schema that has no
+// type, which every JSON value is valid against. Documents generated before it
+// was fixed describe any as an object and interface{} as a string, an integer
+// or an object, which a client would refuse a boolean, a list or a fraction for.
+func anySchema() *openapi3.Schema {
+	return &openapi3.Schema{}
 }
 
 // dateTimeSchema is the schema of a time.Time: a date-time string.

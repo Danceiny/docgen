@@ -92,8 +92,13 @@ func TestTypeParserSyntheticCollections(t *testing.T) {
 		t.Fatal("array item schema missing")
 	}
 	iface := p.parseInterface(&ast.InterfaceType{Methods: &ast.FieldList{}}, &ParseContext{})
-	if iface.Value == nil || len(iface.Value.AnyOf) != 3 {
-		t.Fatal("empty interface schema missing variants")
+	if iface.Value == nil || iface.Value.Type != nil || len(iface.Value.AnyOf) != 0 {
+		t.Fatalf("the empty interface is the schema that has no type: %+v", iface.Value)
+	}
+	withSettings(t, Settings{CompatLegacyFieldShapes: true}, "")
+	legacy := p.parseInterface(&ast.InterfaceType{Methods: &ast.FieldList{}}, &ParseContext{})
+	if legacy.Value == nil || len(legacy.Value.AnyOf) != 3 {
+		t.Fatal("a configuration that keeps legacy_field_shapes gets the union of a string, an integer and an object")
 	}
 }
 

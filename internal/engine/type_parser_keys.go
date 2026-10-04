@@ -47,7 +47,6 @@ func (p *TypeParser) generateTypeKey(expr ast.Expr) string {
 	// the actual generation
 	key := p.generateTypeKeyUncached(expr)
 	typeKeyCache.Store(expr, key)
-	keyTypeCache.Store(key, expr)
 	return key
 }
 

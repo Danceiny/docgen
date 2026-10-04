@@ -1,6 +1,8 @@
 // Package suggest finds the word that a mistyped one was probably meant to be.
 package suggest
 
+import "strings"
+
 // Closest returns the word of words that differs from word by at most two
 // single-character edits, the nearest of them, or "" when there is none or when
 // word is one of them.
@@ -43,4 +45,40 @@ func Distance(a, b string) int {
 		prev = cur
 	}
 	return prev[len(b)]
+}
+
+// Nearest returns the word of words that a mistyped long one, such as the full
+// key of a type, was probably meant to be, or "" when none is near enough: one
+// that differs only in case, one a few edits away (an eighth of the length, three
+// at most), or the only one that ends in the same last dotted segment.
+func Nearest(word string, words []string) string {
+	for _, w := range words {
+		if w == word {
+			return ""
+		}
+	}
+	for _, w := range words {
+		if strings.EqualFold(w, word) {
+			return w
+		}
+	}
+	best, bestDistance := "", max(1, min(len(word)/8, 3))+1
+	for _, w := range words {
+		if d := Distance(word, w); d < bestDistance {
+			best, bestDistance = w, d
+		}
+	}
+	if best != "" {
+		return best
+	}
+	last := word[strings.LastIndex(word, ".")+1:]
+	for _, w := range words {
+		if w[strings.LastIndex(w, ".")+1:] == last {
+			if best != "" {
+				return "" // two types of that name: no guess is better than a wrong one
+			}
+			best = w
+		}
+	}
+	return best
 }

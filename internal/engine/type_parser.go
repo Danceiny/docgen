@@ -16,7 +16,6 @@ var (
 	pkgCache     sync.Map // importPath -> *packages.Package
 	pkgLoadError sync.Map // importPath -> struct{}; fail once per process
 	typeKeyCache sync.Map // ast.Expr -> type key
-	keyTypeCache sync.Map // type key -> ast.Expr
 )
 
 type TypeParser struct {

@@ -86,6 +86,13 @@ func (p *TypeParser) parseArray(expr *ast.ArrayType, ctx *ParseContext) *openapi
 func (p *TypeParser) parseInterface(expr *ast.InterfaceType, ctx *ParseContext) *openapi3.SchemaRef {
 	// the empty interface, interface{}
 	if expr.Methods == nil || len(expr.Methods.List) == 0 {
+		if !settings.CompatLegacyFieldShapes {
+			empty := anySchema()
+			if settings.VendorExtensions {
+				empty.Extensions = map[string]interface{}{"x-go-interface": "interface{}"}
+			}
+			return &openapi3.SchemaRef{Value: empty}
+		}
 		empty := &openapi3.Schema{
 			Description: "empty interface",
 			AnyOf: []*openapi3.SchemaRef{

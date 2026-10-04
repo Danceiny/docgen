@@ -10,7 +10,7 @@ import (
 )
 
 // buildDoc generates one document as its configuration describes it.
-func buildDoc(d config.Doc, genericTitles []string) error {
+func buildDoc(d config.Doc, cfg *config.Config, first bool) error {
 	overlays, err := loadOverlays(rootDir, d.Overlay)
 	if err != nil {
 		return err
@@ -28,7 +28,7 @@ func buildDoc(d config.Doc, genericTitles []string) error {
 	}
 	// initialize the document
 	doc := &openapi3.T{
-		OpenAPI: "3.0.0", // i want 3.1.0
+		OpenAPI: "3.0.0", // kin-openapi reads and writes 3.0 only
 		Info: &openapi3.Info{
 			Title:       d.Info.Title,
 			Version:     d.Info.Version,
@@ -39,6 +39,9 @@ func buildDoc(d config.Doc, genericTitles []string) error {
 		Components: &openapi3.Components{
 			Schemas: make(openapi3.Schemas),
 		},
+	}
+	if first {
+		warnAboutTypeKeysThatNameNoType(cfg, session)
 	}
 	warnAboutPatternsThatMatchNothing(d, session.Packages())
 	if err := GenerateModels(doc, d.Models, nil, session); err != nil {
@@ -56,9 +59,10 @@ func buildDoc(d config.Doc, genericTitles []string) error {
 
 	output := filepath.Join(outDir, d.Output)
 	if d.Audience == config.AudiencePublic {
-		return generatePublicYAML(doc, output, genericTitles, d.ForceKeep, publicSettings(d.Public))
+		warnAboutForceKeepsThatNameNoSchema(d, doc)
+		return generatePublicYAML(doc, output, cfg.GenericTitles, d.ForceKeep, publicSettings(d.Public))
 	}
 
 	// generate the document
-	return generateInternalYAML(doc, output, genericTitles)
+	return generateInternalYAML(doc, output, cfg.GenericTitles)
 }

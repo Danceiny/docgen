@@ -9,7 +9,6 @@ func ResetGenerationCaches() {
 	pkgCache = sync.Map{}
 	pkgLoadError = sync.Map{}
 	typeKeyCache = sync.Map{}
-	keyTypeCache = sync.Map{}
 }
 
 // typeDescCache keeps recursive types from being described twice:

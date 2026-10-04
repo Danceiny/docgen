@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -292,5 +293,50 @@ func TestPetstoreGenerationIsDeterministic(t *testing.T) {
 				t.Fatalf("run %d wrote a different %s document than run 0 (%s)", run, name, describeDifference([]byte(first[name]), []byte(doc)))
 			}
 		}
+	}
+}
+
+// attrOf is the value of an attribute of a record, or "".
+func attrOf(rec slog.Record, key string) string {
+	value := ""
+	rec.Attrs(func(a slog.Attr) bool {
+		if a.Key == key {
+			value = a.Value.String()
+			return false
+		}
+		return true
+	})
+	return value
+}
+
+// A key of the configuration that names a type the module does not declare is a
+// typo that would otherwise do nothing, without a word: the type is described
+// as it is declared, and nobody learns that the entry was meant for it.
+func TestConfigKeysThatNameNoTypeAreReported(t *testing.T) {
+	cfg := petstoreConfig(t, petstoreDir)
+	cfg.TypeMap["example.com.petstore.pet.domain.Pricee"] = config.TypeSpec{Type: "string"}
+	cfg.TypeMap["github.com.shopspring.decimal.Decimal"] = config.TypeSpec{Type: "number"} // another module: not checked
+	cfg.Request.Query["example.com.petstore.pet.protocol.ListPetReq"] = []config.QueryField{{Name: "x"}}
+	cfg.Docs[1].ForceKeep = []string{"example.com.petstore.pet.domain.Pet", "example.com.petstore.pet.domain.Pat"}
+
+	log := &records{}
+	out := t.TempDir()
+	if err := Run(Options{Dir: petstoreDir, Config: cfg, OutputDir: out, Logger: slog.New(log)}); err != nil {
+		t.Fatal(err)
+	}
+
+	guesses := map[string]string{} // the key that names no type -> the key it was probably meant to be
+	for _, rec := range log.list {
+		if rec.Level == slog.LevelWarn && attrOf(rec, "key") != "" {
+			guesses[attrOf(rec, "key")] = attrOf(rec, "didYouMean")
+		}
+	}
+	want := map[string]string{
+		"example.com.petstore.pet.domain.Pricee":       "example.com.petstore.pet.domain.Price",
+		"example.com.petstore.pet.protocol.ListPetReq": "example.com.petstore.pet.protocol.ListPetsReq",
+		"example.com.petstore.pet.domain.Pat":          "example.com.petstore.pet.domain.Pet",
+	}
+	if !reflect.DeepEqual(guesses, want) {
+		t.Errorf("reported %v, want %v", guesses, want)
 	}
 }

@@ -458,11 +458,10 @@ func TestProcessModels_GenericDeclarationsAreNotReportedAsProblems(t *testing.T)
 	}
 }
 
-// A type named T is read as a type parameter, as the name T has always been in
-// documents of generic types: a field of it has no property. That is a limit, and
-// it is not reported as a problem, since T is by far the most common name of a
-// type parameter.
-func TestProcessModels_ATypeNamedTIsReadAsATypeParameter(t *testing.T) {
+// T is by far the most common name of a type parameter, and a field of the type
+// T of a generic declaration is the placeholder of a generic field. A type that
+// really is called T is a type like any other, and a field of it is a property.
+func TestProcessModels_ATypeNamedTIsATypeLikeAnyOther(t *testing.T) {
 	logs := captureLogs(t)
 	pkg := loadFixture(t, "testdata/typenamedt")
 	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "snapshot", Version: "typenamedt"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
@@ -472,7 +471,7 @@ func TestProcessModels_ATypeNamedTIsReadAsATypeParameter(t *testing.T) {
 	holder := doc.Components.Schemas["github.com.Danceiny.docgen.internal.engine.testdata.typenamedt.Holder"]
 	require.NotNil(t, holder)
 	assert.Contains(t, holder.Value.Properties, "count")
-	assert.NotContains(t, holder.Value.Properties, "item")
+	assert.Contains(t, holder.Value.Properties, "item")
 
 	for _, rec := range logs.records {
 		assert.Less(t, rec.Level, slog.LevelWarn, "logged %q %v", rec.Message, attrsOf(rec))

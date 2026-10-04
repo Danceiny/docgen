@@ -590,5 +590,23 @@ func getTagValueByOrderDefaultByName(field *ast.Field, tagNames ...string) (stri
 
 // isRequiredField reports whether a field is required.
 func isRequiredField(field *ast.Field) bool {
-	return getValueFromTag(field, "validate") == "required" || getValueFromTag(field, "required") == "true" || getValueFromTag(field, "binding") == "required"
+	if getValueFromTag(field, "required") == "true" {
+		return true
+	}
+	validate, binding := getValueFromTag(field, "validate"), getValueFromTag(field, "binding")
+	if settings.CompatLegacyFieldShapes {
+		return validate == "required" || binding == "required"
+	}
+	return hasRule(validate, "required") || hasRule(binding, "required")
+}
+
+// hasRule reports whether a validate or binding tag has a rule: they are
+// separated by commas, required,email.
+func hasRule(tag, rule string) bool {
+	for _, r := range strings.Split(tag, ",") {
+		if strings.TrimSpace(r) == rule {
+			return true
+		}
+	}
+	return false
 }

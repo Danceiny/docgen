@@ -1,9 +1,11 @@
 package pipeline
 
 import (
+	"log/slog"
 	"reflect"
 	"testing"
 
+	"github.com/Danceiny/docgen/internal/config"
 	"github.com/Danceiny/docgen/internal/engine"
 	"golang.org/x/tools/go/packages"
 )
@@ -68,5 +70,34 @@ func TestUnmatchedPatternsAreFound(t *testing.T) {
 	got := unmatchedPatterns(pkgs, []string{"*/service", "service", "*/domain", "nope", "*"})
 	if want := []string{"*/service", "nope"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("unmatched = %v, want %v", got, want)
+	}
+}
+
+// A list that names both layouts, */service for a module with directories above
+// and service for one without, has one pattern that matches nothing by design.
+func TestTheTwinOfAPatternIsNotReportedWhenBothAreListed(t *testing.T) {
+	engine.ModuleName = "example.com/shop"
+	log := &records{}
+	engine.SetLogger(slog.New(log))
+	t.Cleanup(func() { engine.ModuleName = ""; engine.SetLogger(nil) })
+
+	pkgs := []*packages.Package{{ID: "example.com/shop/service"}, {ID: "example.com/shop/model"}}
+	warnAboutPatternsThatMatchNothing(config.Doc{
+		Name:     "internal",
+		Models:   []string{"*/model", "model"},
+		Services: []string{"*/service", "orders", "*/cron"},
+	}, pkgs)
+
+	var got []string
+	for _, rec := range log.list {
+		rec.Attrs(func(a slog.Attr) bool {
+			if a.Key == "pattern" {
+				got = append(got, a.Value.String())
+			}
+			return true
+		})
+	}
+	if want := []string{"*/service", "orders", "*/cron"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("reported patterns = %v, want %v: */model has model beside it, and nothing else is named in both layouts", got, want)
 	}
 }

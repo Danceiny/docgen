@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/Danceiny/docgen/internal/config"
@@ -55,8 +56,14 @@ func warnAboutPatternsThatMatchNothing(d config.Doc, pkgs []*packages.Package) {
 		patterns []string
 	}{{"models", d.Models}, {"services", d.Services}} {
 		for _, pattern := range unmatchedPatterns(pkgs, field.patterns) {
-			engine.Logger().Warn("a pattern matches no package of the module; patterns are matched against the package path relative to the module, so */service does not match a package service at the module root",
-				"document", d.Name, "list", field.name, "pattern", pattern)
+			msg := "a pattern matches no package of the module; patterns are matched against the package path relative to the module"
+			if rest, below := strings.CutPrefix(pattern, "*/"); below {
+				if slices.Contains(field.patterns, rest) {
+					continue // the list names both layouts, one of them is not the module's
+				}
+				msg += ", so " + pattern + " does not match the package " + rest + " at the module root; list " + rest + " too"
+			}
+			engine.Logger().Warn(msg, "document", d.Name, "list", field.name, "pattern", pattern)
 		}
 	}
 }

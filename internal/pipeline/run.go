@@ -58,9 +58,9 @@ func Run(opts Options) error {
 	engine.Configure(settings)
 	engine.SetLogger(opts.Logger)
 
-	for _, d := range docs {
+	for i, d := range docs {
 		start := time.Now()
-		if err := buildDoc(d, opts.Config.GenericTitles); err != nil {
+		if err := buildDoc(d, opts.Config, i == 0); err != nil {
 			return fmt.Errorf("document %q: %w", d.Name, err)
 		}
 		engine.Logger().Info("document generated", "document", d.Name, "output", d.Output, "took", time.Since(start).Round(time.Millisecond))

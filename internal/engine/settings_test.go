@@ -92,15 +92,14 @@ func TestOwnPackagesAreRecognisedByTheModulePath(t *testing.T) {
 	for path, want := range map[string]bool{
 		"github.com/acme/shop":                true,
 		"github.com/acme/shop/order/domain":   true,
-		"vendor/github.com/acme/shop/order":   true,
 		"github.com/acme/shopfront/order":     false, // another module that starts with the same text
 		"github.com/acme/other":               false,
 		"github.com/stretchr/testify/require": false,
 		"example.com/other/types":             false,
 		"":                                    false,
 	} {
-		if got := isInternalPackage(path); got != want {
-			t.Errorf("isInternalPackage(%q) = %v, want %v", path, got, want)
+		if got := isOwnImportPath(path); got != want {
+			t.Errorf("isOwnImportPath(%q) = %v, want %v", path, got, want)
 		}
 	}
 }

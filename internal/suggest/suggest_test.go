@@ -40,3 +40,26 @@ func TestClosest(t *testing.T) {
 		}
 	}
 }
+
+func TestNearestFindsTheKeyThatWasMeant(t *testing.T) {
+	keys := []string{
+		"example.com.shop.order.domain.Order",
+		"example.com.shop.order.domain.OrderLine",
+		"example.com.shop.pet.domain.Pet",
+		"example.com.shop.store.Pet",
+	}
+	for _, tc := range []struct{ in, want, why string }{
+		{"example.com.shop.order.domain.Ordr", "example.com.shop.order.domain.Order", "a letter missing"},
+		{"example.com.shop.order.domain.order", "example.com.shop.order.domain.Order", "a capital"},
+		{"example.com.shop.order.domian.OrderLine", "example.com.shop.order.domain.OrderLine", "two letters swapped"},
+		{"example.com.shop.order.OrderLine", "example.com.shop.order.domain.OrderLine", "a package left out"},
+		{"example.com.shop.pet.domain.Pet", "", "it is one of them"},
+		{"example.com.shop.zebra.Pet", "", "two types are called Pet: no guess is better than a wrong one"},
+		{"example.com.shop.order.domain.Invoice", "", "nothing is like it"},
+		{"other.module.Thing", "", "nothing is like it"},
+	} {
+		if got := Nearest(tc.in, keys); got != tc.want {
+			t.Errorf("Nearest(%q) = %q, want %q (%s)", tc.in, got, tc.want, tc.why)
+		}
+	}
+}

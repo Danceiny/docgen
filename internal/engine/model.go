@@ -15,11 +15,6 @@ func ProcessModelsWithSession(pkg *packages.Package, doc *openapi3.T, session *G
 	return parser.defers, parser.mergeTasks
 }
 
-// isInternalPackage reports whether the package belongs to the module.
-func isInternalPackage(pkgPath string) bool {
-	return isOwnImportPath(pkgPath) || isOwnImportPath(strings.TrimPrefix(pkgPath, "vendor/"))
-}
-
 // replaceSlashes replaces the path separators safely.
 func replaceSlashes(s string) string {
 	return strings.ReplaceAll(s, "/", ".")

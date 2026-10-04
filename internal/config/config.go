@@ -76,6 +76,14 @@ type Compat struct {
 	// of one has no content) and which request.runtime_only can name as
 	// "unknown".
 	LegacyOperationTypes bool `yaml:"legacy_operation_types"`
+	// LegacyFieldShapes reads the fields of a struct as documents always read
+	// them: a name that is repeated in a declaration (Lat, Lng float64) is the
+	// first name only, a field embedded under a json name (Base `json:"base"`)
+	// is flattened into the struct although encoding/json nests it, and a field
+	// is required when its validate or binding tag is exactly "required", not
+	// when it is one of several rules (required,email), and any is an object
+	// and interface{} is a string, an integer or an object, not any value.
+	LegacyFieldShapes bool `yaml:"legacy_field_shapes"`
 }
 
 // Doc describes one generated document.
@@ -371,6 +379,7 @@ func (c *Config) validate() error {
 		}
 		problems = append(problems, spec.validate("type_map."+key)...)
 	}
+	problems = append(problems, c.validateTypeKeys()...)
 	problems = append(problems, c.Request.validate()...)
 	problems = append(problems, c.Response.validate()...)
 	problems = append(problems, c.Errors.validate()...)
@@ -389,6 +398,48 @@ func (c *Config) validate() error {
 		}
 	}
 	return errors.Join(problems...)
+}
+
+// validateTypeKeys rejects a key that names a type in a way no type is named. A
+// full key is the import path with its slashes turned into dots, then a dot and
+// the name of the type; a slash in one is a path that was not converted, and the
+// entry would never be looked up.
+func (c *Config) validateTypeKeys() []error {
+	var problems []error
+	check := func(in, key string) {
+		if strings.Contains(key, "/") {
+			problems = append(problems, fmt.Errorf("%s: %q has a slash; a type is named by its full key, the import path with dots instead of slashes and then the name of the type, such as %q", in, key, strings.ReplaceAll(key, "/", ".")))
+		}
+	}
+	for _, key := range c.GenericTitles {
+		check("generic_titles", key)
+	}
+	for key := range c.TypeMap {
+		check("type_map", key)
+	}
+	for name, key := range c.Headers.Types {
+		check("headers.types."+name, key)
+	}
+	for key := range c.Request.Multipart {
+		check("request.multipart", key)
+	}
+	for key := range c.Request.Query {
+		check("request.query", key)
+	}
+	for _, r := range c.Request.RuntimeOnly {
+		check("request.runtime_only", r.Type)
+	}
+	for key := range c.Response.Binary {
+		check("response.binary", key)
+	}
+	for i, d := range c.Docs {
+		for _, key := range d.ForceKeep {
+			check(fmt.Sprintf("docs[%d].force_keep", i), key)
+		}
+	}
+	// the order of the keys of a map is not the order of the messages
+	slices.SortFunc(problems, func(a, b error) int { return strings.Compare(a.Error(), b.Error()) })
+	return problems
 }
 
 func (h Headers) validate() []error {

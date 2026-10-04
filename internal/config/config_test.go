@@ -600,3 +600,40 @@ func TestQueryFieldTypes(t *testing.T) {
 		t.Errorf("a query type that does not exist: %v", err)
 	}
 }
+
+// A type is named by its full key, with dots. A key written as an import path, with
+// slashes, is never looked up, so it is an error that says how to write it.
+func TestTypeKeysWithSlashesAreRejected(t *testing.T) {
+	_, err := Parse([]byte(`
+version: 1
+type_map:
+  github.com/shopspring/decimal.Decimal: {type: number}
+request:
+  query:
+    example.com/shop/order.ListReq: [{name: page}]
+headers:
+  types: {Base: example.com/shop/protocol.Base}
+docs:
+  - name: internal
+    audience: internal
+    output: docs/api/api.yaml
+    info: {title: T}
+    models: ["*"]
+    services: ["*"]
+    force_keep: [example.com/shop/hook.Payload]
+`))
+	if err == nil {
+		t.Fatal("keys with slashes were accepted")
+	}
+	for _, want := range []string{
+		`type_map: "github.com/shopspring/decimal.Decimal" has a slash`,
+		`such as "github.com.shopspring.decimal.Decimal"`,
+		`request.query: "example.com/shop/order.ListReq" has a slash`,
+		`headers.types.Base: "example.com/shop/protocol.Base" has a slash`,
+		`docs[0].force_keep: "example.com/shop/hook.Payload" has a slash`,
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not say %q:\n%v", want, err)
+		}
+	}
+}

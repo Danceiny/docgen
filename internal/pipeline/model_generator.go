@@ -89,21 +89,25 @@ func GenerateModels(doc *openapi3.T, inclusive, exclusive []string, sessions ...
 		}
 	}
 
-	// run the MergeTasks until no property is updated (this passes properties along nested embedding)
-	maxIterations := 10
-	for i := 0; i < maxIterations; i++ {
-		changed := false
+	runMergeTasks(doc, mergeTasks)
+	return nil
+}
+
+// runMergeTasks gives a struct the fields of the structs it embeds, again and
+// again until no pass adds one, so that fields are passed along embedding of any
+// depth, whatever order the tasks are in. Every pass that changes something adds
+// a property or a required field to a finite set, so the loop ends, cycles of
+// embedding included.
+func runMergeTasks(doc *openapi3.T, mergeTasks *list.List) {
+	for changed := true; changed; {
+		changed = false
 		for v := mergeTasks.Front(); v != nil; v = v.Next() {
 			task := v.Value.(engine.MergeTask)
 			if mergeProperties(doc, task.TargetKey, task.SourceKey) {
 				changed = true
 			}
 		}
-		if !changed {
-			break
-		}
 	}
-	return nil
 }
 
 func mergeProperties(doc *openapi3.T, targetKey, sourceKey string) bool {

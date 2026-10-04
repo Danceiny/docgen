@@ -64,6 +64,12 @@ type Settings struct {
 	// an operation as documents always read them: a list is its element type, and
 	// a map, an interface and an instantiated generic type are unknown.
 	CompatLegacyOperationTypes bool
+	// CompatLegacyFieldShapes reads the fields of a struct as documents always
+	// read them: the first name of a declaration with several, an embedded field
+	// that has a json name flattened, "required" only as the whole of a validate
+	// or binding tag, and any as an object and interface{} as one of a string, an
+	// integer and an object.
+	CompatLegacyFieldShapes bool
 	// KeepEmptyTags keeps the empty tags an operation gets from a missing @tags
 	// or @permission; without it they are dropped.
 	KeepEmptyTags bool
