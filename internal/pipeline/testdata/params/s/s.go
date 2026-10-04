@@ -23,7 +23,7 @@ func (Service) Count(ctx context.Context, status string) (*m.Item, error) { retu
 //
 // @method: GET
 // @path: /byId/{id}
-// @param:path id string required "the id of the item"
+// @param:path id string optional "the id of the item"
 func (Service) ByID(ctx context.Context, id string) (*m.Item, error) { return nil, nil }
 
 // Many takes several parameters of basic types.

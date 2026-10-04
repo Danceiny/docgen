@@ -46,8 +46,9 @@ const (
 type Alias = string
 
 const (
-	AliasA Alias = "a"
-	Other        = "not an Alias by its declaration"
+	AliasA    Alias  = "a"
+	Other            = "not an Alias by its declaration"
+	Unrelated string = "a string, which is what Alias is"
 )
 
 // Plain has no constants.
