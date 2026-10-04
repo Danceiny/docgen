@@ -63,7 +63,7 @@ func (p *TypeParser) getEmbeddedFieldNamesFromIdent(ident *ast.Ident, ctx *Parse
 						if structType, ok := targetType.(*ast.StructType); ok {
 							// a new context with the imports of the external package
 							externalCtx := &ParseContext{
-								importAlias:  parseFileImports(externalPkg.Syntax[0]),
+								importAlias:  parseFileImportsOf(externalPkg, externalPkg.Syntax[0]),
 								Doc:          ctx.Doc,
 								Comment:      ctx.Comment,
 								Field:        ctx.Field,
@@ -141,7 +141,7 @@ func (p *TypeParser) extractFieldNamesFromExternalPackageCached(externalPkg *pac
 		if structType, ok := targetType.(*ast.StructType); ok {
 			// a new context with the imports of the external package
 			externalCtx := &ParseContext{
-				importAlias:  parseFileImports(externalPkg.Syntax[0]), // the imports of the external package
+				importAlias:  parseFileImportsOf(externalPkg, externalPkg.Syntax[0]), // the imports of the external package
 				Doc:          ctx.Doc,
 				Comment:      ctx.Comment,
 				Field:        ctx.Field,

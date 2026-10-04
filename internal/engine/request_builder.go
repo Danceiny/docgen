@@ -201,6 +201,11 @@ func (m *Method) parseBaseType(typeStr string) string {
 	base := strings.ReplaceAll(typeStr, "*", "")
 	base = strings.ReplaceAll(base, "[]", "")
 
+	// a basic type has no package
+	if getBasicTypeSchema(base) != nil {
+		return base
+	}
+
 	// step 2: handle import aliases (such as model.User → example.com.pet.model.User)
 	if parts := strings.Split(base, "."); len(parts) > 1 {
 		if realPkg, ok := m.ImportAlias[parts[0]]; ok {

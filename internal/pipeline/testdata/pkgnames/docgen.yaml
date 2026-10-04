@@ -1,0 +1,8 @@
+version: 1
+docs:
+  - name: all
+    audience: internal
+    output: out/all.yaml
+    info: {title: Package names, version: 0.0.1}
+    models: ["model", "proto/v2"]
+    services: ["service"]

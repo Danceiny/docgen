@@ -17,44 +17,67 @@ var (
 	caser = cases.Title(language.English)
 )
 
-// BuildPathItem openapi
+// BuildPathItem adds the operation of a method to the document, under its route,
+// for each HTTP method its @method names.
 func BuildPathItem(doc *openapi3.T, service ServiceInterface, method *Method) {
 	method.ServiceName = service.ServiceName
 	method.APIPath = route.Resolve(service.ServiceName, method.Name, ExtractTag(method.Doc, "path"), apiPrefix())
+
+	// the HTTP methods an operation can have
+	var verbs []string
+	for _, httpMethod := range parseHTTPMethod(method.Doc) {
+		verb := strings.ToUpper(strings.TrimSpace(httpMethod))
+		switch verb {
+		case http.MethodPost, http.MethodDelete, http.MethodGet, http.MethodPut,
+			http.MethodPatch, http.MethodHead, http.MethodOptions, http.MethodTrace:
+			verbs = append(verbs, verb)
+		default:
+			Logger().Warn("@method names an HTTP method that an operation cannot have, ignoring it",
+				"method", method.Name, "httpMethod", httpMethod, "at", method.Pos)
+		}
+	}
+	if len(verbs) == 0 {
+		return // nothing to put under the route
+	}
+
 	// get or create the PathItem
 	pathItem := doc.Paths.Value(method.APIPath)
 	if pathItem == nil {
 		pathItem = &openapi3.PathItem{}
 	}
 
-	// parse the HTTP method
-	httpMethods := parseHTTPMethod(method.Doc)
 	operation := buildOperation(method, doc)
+	for _, verb := range verbs {
+		op := operation
+		if len(verbs) > 1 {
+			// an operation id names one operation
+			cp := *operation
+			cp.OperationID = operation.OperationID + "_" + strings.ToLower(verb)
+			op = &cp
+		}
+		if replaced := pathItem.GetOperation(verb); replaced != nil {
+			Logger().Warn("two methods answer the same route with the same HTTP method; the later one is documented",
+				"route", method.APIPath, "httpMethod", verb, "method", method.Name, "replaces", replaced.Summary, "at", method.Pos)
+		}
+		pathItem.SetOperation(verb, op)
+	}
+	disambiguateOperationIDs(pathItem)
+	doc.Paths.Set(method.APIPath, pathItem)
+}
 
-	for _, httpMethod := range httpMethods {
-		switch strings.ToUpper(strings.TrimSpace(httpMethod)) {
-		case http.MethodPost:
-			pathItem.Post = operation
-		case http.MethodDelete:
-			pathItem.Delete = operation
-		case http.MethodGet:
-			pathItem.Get = operation
-		case http.MethodPut:
-			pathItem.Put = operation
-		case http.MethodPatch:
-			pathItem.Patch = operation
-		case http.MethodHead:
-			pathItem.Head = operation
-		case http.MethodOptions:
-			pathItem.Options = operation
-		case http.MethodTrace:
-			pathItem.Trace = operation
-		default:
-			Logger().Warn("@method names an HTTP method that an operation cannot have, ignoring it",
-				"method", method.Name, "httpMethod", httpMethod)
+// disambiguateOperationIDs gives the operations of one route that share an id
+// the id with their HTTP method, as two methods of a service that answer one
+// route with different verbs do. A route with one operation keeps its id.
+func disambiguateOperationIDs(item *openapi3.PathItem) {
+	seen := map[string]int{}
+	for _, op := range item.Operations() {
+		seen[op.OperationID]++
+	}
+	for verb, op := range item.Operations() {
+		if seen[op.OperationID] > 1 {
+			op.OperationID += "_" + strings.ToLower(verb)
 		}
 	}
-	doc.Paths.Set(method.APIPath, pathItem)
 }
 
 func buildOperation(method *Method, doc *openapi3.T) *openapi3.Operation {
@@ -107,7 +130,7 @@ func buildExternalDocs(method *Method, doc *openapi3.T) *openapi3.ExternalDocs {
 	description, url, found := strings.Cut(m, ":")
 	if !found {
 		Logger().Warn("@doc needs a description and a URL separated by a colon, ignoring it",
-			"method", method.Name, "annotation", m)
+			"method", method.Name, "annotation", m, "at", method.Pos)
 		return nil
 	}
 	return &openapi3.ExternalDocs{

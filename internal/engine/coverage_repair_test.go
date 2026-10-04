@@ -66,8 +66,11 @@ func TestRuntimeRequestAndMethodParsingBranches(t *testing.T) {
 	if got := m.parseBaseType("model.Request"); got != "example.app.model.Request" {
 		t.Fatalf("alias type=%s", got)
 	}
-	if got := m.parseBaseType("string"); got != "example.app.string" {
+	if got := m.parseBaseType("Request"); got != "example.app.Request" {
 		t.Fatalf("local type=%s", got)
+	}
+	if got := m.parseBaseType("[]*string"); got != "string" {
+		t.Fatalf("a basic type has no package: %s", got)
 	}
 	if p, d := parseTypeModifiers("**[][]int"); p != 2 || d != 2 {
 		t.Fatalf("modifiers=%d,%d", p, d)

@@ -3,7 +3,9 @@ package engine
 import (
 	"fmt"
 	"go/ast"
+	"go/constant"
 	"go/token"
+	"go/types"
 	"reflect"
 	"slices"
 	"strconv"
@@ -18,6 +20,7 @@ import (
 func (m *Method) parseParams(params *ast.FieldList) {
 	m.Params = nil // reset the list of parameters
 	if params == nil || len(params.List) == 0 {
+		m.warnUnmatchedParamAnnotations(nil)
 		return
 	}
 
@@ -26,6 +29,7 @@ func (m *Method) parseParams(params *ast.FieldList) {
 	if isContextType(params.List[0].Type) {
 		startIndex = 1
 	}
+	m.warnUnmatchedParamAnnotations(params.List[startIndex:])
 
 	// go through all parameters (including the request body)
 	for i, field := range params.List[startIndex:] {
@@ -124,9 +128,12 @@ func (m *Method) parseResults(results *ast.FieldList) {
 			actualHTTPCode := strconv.Itoa(int(catalogErr.HTTPCode))
 			if statusCode != actualHTTPCode {
 				Logger().Warn("status code in a @response comment differs from the HTTP code of its error, using the error's",
-					"commentCode", statusCode, "error", errName, "errorCode", actualHTTPCode)
+					"commentCode", statusCode, "error", errName, "errorCode", actualHTTPCode, "method", m.Name, "at", m.Pos)
 				statusCode = actualHTTPCode
 			}
+		} else if settings.Errors != nil && len(settings.Errors.Entries()) > 0 {
+			Logger().Warn("@response names an error that the error catalog does not have, so the response has no schema",
+				"error", errName, "method", m.Name, "at", m.Pos)
 		}
 
 		resp := ResponseSpec{
@@ -212,6 +219,29 @@ func parseFileImports(file *ast.File) map[string]string {
 	return aliases
 }
 
+// parseFileImportsOf is parseFileImports with the names that the imported
+// packages really have: a package whose name is not the last element of its
+// import path (package models in .../model, package proto in .../proto/v2) is
+// used in the file by the name it declares.
+func parseFileImportsOf(pkg *packages.Package, file *ast.File) map[string]string {
+	aliases := parseFileImports(file)
+	if pkg == nil {
+		return aliases
+	}
+	for _, imp := range file.Imports {
+		if imp.Name != nil {
+			continue // an alias that was written is the name
+		}
+		fullPath := strings.Trim(imp.Path.Value, `"`)
+		if imported := pkg.Imports[fullPath]; imported != nil && imported.Name != "" {
+			if _, taken := aliases[imported.Name]; !taken {
+				aliases[imported.Name] = fullPath
+			}
+		}
+	}
+	return aliases
+}
+
 // extractResponseCode returns the @response annotations of a doc comment as
 // [status, error name, description], for example @response:201,UserCreated,LongDescription.
 func extractResponseCode(doc string) (out [][3]string) {
@@ -251,7 +281,7 @@ func FindServiceImplementations(pkg *packages.Package) []ServiceInterface {
 	structMethods := make(map[string][]*Method) // key: the name of the struct
 	// phase one: collect the methods of all structs
 	for _, file := range pkg.Syntax {
-		pkgAliases := parseFileImports(file)
+		pkgAliases := parseFileImportsOf(pkg, file)
 
 		ast.Inspect(file, func(n ast.Node) bool {
 			// only method declarations
@@ -355,15 +385,20 @@ func extractStructName(recv *ast.FieldList) string {
 func extractServiceName(methods []*Method) string {
 	for _, m := range methods {
 		if m.Name == "Name" && m.ResponseType != nil && (m.ResponseType.FullKey == "string" || strings.HasSuffix(m.ResponseType.FullKey, ".string")) {
-			// parse the returned literal from the body of the method in the AST
-			return parseNameMethodBody(m.Source)
+			// the string the method returns
+			name := parseNameMethodBody(m.Source, m.Info)
+			if name == "" {
+				Logger().Warn("the Name method does not return a string literal or a constant, so the struct is not a service",
+					"method", m.Name, "at", m.Pos)
+			}
+			return name
 		}
 	}
 	return "" // no valid implementation found
 }
 
 // parseNameMethodBody safely parses the return value of the Name method.
-func parseNameMethodBody(fn *ast.FuncDecl) string {
+func parseNameMethodBody(fn *ast.FuncDecl, info *types.Info) string {
 	// 1. check the signature of the method
 	if fn.Type.Results == nil || len(fn.Type.Results.List) != 1 {
 		return ""
@@ -378,6 +413,15 @@ func parseNameMethodBody(fn *ast.FuncDecl) string {
 		retStmt, ok := n.(*ast.ReturnStmt)
 		if !ok || len(retStmt.Results) != 1 {
 			return true
+		}
+
+		// the type checker knows the value of any constant expression: a literal, a
+		// constant of this file or of another package, a concatenation
+		if info != nil {
+			if tv, ok := info.Types[retStmt.Results[0]]; ok && tv.Value != nil && tv.Value.Kind() == constant.String {
+				returnValue = constant.StringVal(tv.Value)
+				return false
+			}
 		}
 
 		// 3. handle string literals
@@ -418,7 +462,13 @@ func parseMethod(fn *ast.FuncDecl, pkgAlias map[string]string, pkg *packages.Pac
 		Source:         fn,
 		ImportAlias:    pkgAlias,
 		CurrentPkgPath: pkg.PkgPath,
+		Info:           pkg.TypesInfo,
 		Hidden:         route.Skipped(strings.Split(comments, "\n")),
+	}
+	if pkg.Fset != nil {
+		if pos := pkg.Fset.Position(fn.Pos()); pos.IsValid() {
+			method.Pos = fmt.Sprintf("%s:%d", pos.Filename, pos.Line)
+		}
 	}
 
 	// parse the @headerType tag

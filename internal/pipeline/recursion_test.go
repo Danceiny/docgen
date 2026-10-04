@@ -2,9 +2,11 @@ package pipeline
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -224,4 +226,81 @@ func TestLegacyOperationTypesKeepTheOldResults(t *testing.T) {
 		require.NotNil(t, response, path)
 		assert.Nil(t, response.Value.Content.Get("application/json"), "%s: a map and a generic type have no content", path)
 	}
+}
+
+// parameterOf finds the parameter with the name of an operation.
+func parameterOf(t *testing.T, op *openapi3.Operation, name string) *openapi3.Parameter {
+	t.Helper()
+	for _, p := range op.Parameters {
+		if p.Value.Name == name {
+			return p.Value
+		}
+	}
+	t.Fatalf("%s %s has no parameter %q; it has %d", op.OperationID, op.Summary, name, len(op.Parameters))
+	return nil
+}
+
+// A @param annotation turns a parameter of a basic type into a query, header or
+// path parameter: it names the Go parameter, or its position as param1, param2.
+// One that names no parameter says so instead of being ignored.
+func TestParamAnnotationsDescribeTheParametersOfBasicTypes(t *testing.T) {
+	cfg, err := config.Load("testdata/params/docgen.yaml")
+	require.NoError(t, err)
+	log := &records{}
+	out := t.TempDir()
+	require.NoError(t, Run(Options{Dir: "testdata/params", Config: cfg, OutputDir: out, Logger: slog.New(log)}))
+	data, err := os.ReadFile(filepath.Join(out, "out/all.yaml"))
+	require.NoError(t, err)
+	doc, err := openapi3.NewLoader().LoadFromData(data)
+	require.NoError(t, err)
+	require.NoError(t, doc.Validate(context.Background()))
+
+	count := doc.Paths.Value("/api/shop/count").Get
+	status := parameterOf(t, count, "status")
+	assert.Equal(t, "query", status.In)
+	assert.True(t, status.Required)
+	assert.Equal(t, "the state of the items", status.Description)
+	assert.True(t, status.Schema.Value.Type.Is("string"))
+	assert.Nil(t, count.RequestBody, "a parameter that is described is not a body")
+
+	byID := doc.Paths.Value("/api/shop/byId/{id}").Get
+	id := parameterOf(t, byID, "id")
+	assert.Equal(t, "path", id.In)
+	assert.True(t, id.Required, "a path parameter is always required")
+
+	many := doc.Paths.Value("/api/shop/many").Get
+	limit := parameterOf(t, many, "limit")
+	assert.Equal(t, "query", limit.In)
+	assert.False(t, limit.Required)
+	assert.True(t, limit.Schema.Value.Type.Is("integer"))
+	tags := parameterOf(t, many, "tags")
+	assert.True(t, tags.Schema.Value.Type.Is("array"))
+	assert.Equal(t, "header", parameterOf(t, many, "token").In)
+
+	assert.Equal(t, "query", parameterOf(t, doc.Paths.Value("/api/shop/pos").Get, "param1").In, "by position")
+
+	unmatched := doc.Paths.Value("/api/shop/unmatched").Post
+	assert.NotNil(t, unmatched.RequestBody)
+	assert.Empty(t, unmatched.Parameters)
+	warned := false
+	for _, rec := range log.list {
+		if rec.Level == slog.LevelWarn && strings.Contains(rec.Message, "@param names a parameter that the method does not have") {
+			warned = true
+		}
+	}
+	assert.True(t, warned, "an annotation that matches nothing is reported")
+
+	assert.NotNil(t, doc.Paths.Value("/api/shop/plain").Post.RequestBody, "an undescribed basic type is the body, as before")
+}
+
+// A package is used by the name it declares, which is not always the last element
+// of its import path: package models in model/, package proto in proto/v2.
+func TestAPackageNameThatIsNotTheLastElementOfItsPath(t *testing.T) {
+	doc := generateFixture(t, "testdata/pkgnames", "all")
+	ask := doc.Paths.Value("/api/shop/ask").Post
+	assert.Equal(t, "#/components/schemas/example.com.pkgnames.model.Req", ask.RequestBody.Value.Content.Get("application/json").Schema.Ref)
+	assert.Equal(t, "#/components/schemas/example.com.pkgnames.proto.v2.Reply", responseSchema(t, doc, "/api/shop/ask").Ref)
+	answer := doc.Paths.Value("/api/shop/answer").Post
+	assert.Equal(t, "#/components/schemas/example.com.pkgnames.proto.v2.Reply", answer.RequestBody.Value.Content.Get("application/json").Schema.Ref)
+	assert.Equal(t, "#/components/schemas/example.com.pkgnames.model.Resp", responseSchema(t, doc, "/api/shop/answer").Ref)
 }

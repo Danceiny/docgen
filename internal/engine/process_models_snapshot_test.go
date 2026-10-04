@@ -511,3 +511,27 @@ func TestProcessModels_EmbeddedCyclesAndMalformedJSONDefaults(t *testing.T) {
 	assert.Nil(t, defaults.Value.Properties["plain"].Value.Default)
 	assert.Equal(t, "x", defaults.Value.Properties["valued"].Value.Default)
 }
+
+// The name of a service is the string its Name method returns, wherever the
+// constant it returns is declared; one that cannot be read, a variable or a
+// function's result, is not a service, and the log says so rather than leaving
+// the struct out in silence.
+func TestServiceNamesAreConstantsWhereverTheyAreDeclared(t *testing.T) {
+	logs := captureLogs(t)
+	pkg := loadFixture(t, "testdata/servicenames")
+
+	var names []string
+	for _, service := range FindServiceImplementations(pkg) {
+		names = append(names, service.ServiceName)
+	}
+	sort.Strings(names)
+	assert.Equal(t, []string{"literal", "order", "samefile", "stock", "store/joined"}, names)
+
+	var unresolved int
+	for _, rec := range logs.records {
+		if rec.Level == slog.LevelWarn && rec.Message == "the Name method does not return a string literal or a constant, so the struct is not a service" {
+			unresolved++
+		}
+	}
+	assert.Equal(t, 2, unresolved, "the variable and the computed name are reported")
+}

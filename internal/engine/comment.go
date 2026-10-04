@@ -32,7 +32,7 @@ func ExtractTagFromComments(comments []string, tagName string) string {
 			content := strings.TrimSpace(strings.TrimPrefix(line, "@"+tagName+":"))
 			// Permission/tag values are comma-separated single-line metadata. Do
 			// not absorb following comment lines (which may be YAML-looking text).
-			if tagName == "permission" || tagName == "tags" || tagName == "path" {
+			if tagName == "permission" || tagName == "tags" || tagName == "path" || tagName == "method" {
 				return content
 			}
 			// Capture continuation lines until next tag
@@ -119,12 +119,8 @@ func (m *Method) parseParamComment(doc string, identifier interface{}) *ParamSpe
 		}
 
 		// @param:<in> <name> <type> <required> ["<description>"]
-		parts := strings.SplitN(line[len("@param:"):], " ", 5)
-		if len(parts) < 4 {
-			continue
-		}
-
-		if parts[1] != target {
+		parts := splitParamAnnotation(line)
+		if parts == nil || parts[1] != target {
 			continue
 		}
 
@@ -132,15 +128,47 @@ func (m *Method) parseParamComment(doc string, identifier interface{}) *ParamSpe
 		if len(parts) == 5 {
 			description = strings.Trim(parts[4], `"`)
 		}
+		types := m.parseStringType(parts[2])
+		if len(types) == 0 {
+			continue
+		}
 		return &ParamSpec{
-			In:          parts[0],
-			Name:        parts[1],
-			Types:       m.parseStringType(parts[2]),
-			Required:    parts[3] == "required",
+			In:    parts[0],
+			Name:  parts[1],
+			Types: types,
+			// A parameter of the path is part of the route: it is always there.
+			Required:    parts[3] == "required" || parts[0] == "path",
 			Description: description,
 		}
 	}
 	return nil
+}
+
+// splitParamAnnotation splits a line "@param:<in> <name> <type> <required>
+// [\"description\"]" into its parts; a line that is not such an annotation (it
+// is prose, or it is short of parts) gives nil.
+func splitParamAnnotation(line string) []string {
+	rest, ok := strings.CutPrefix(line, "@param:")
+	if !ok {
+		return nil
+	}
+	parts := strings.SplitN(strings.TrimSpace(rest), " ", 5)
+	if len(parts) < 4 {
+		return nil
+	}
+	return parts
+}
+
+// paramAnnotationNames lists the names the @param annotations of a doc comment
+// give to parameters.
+func paramAnnotationNames(doc string) []string {
+	var names []string
+	for _, line := range strings.Split(doc, "\n") {
+		if parts := splitParamAnnotation(line); parts != nil {
+			names = append(names, parts[1])
+		}
+	}
+	return names
 }
 
 func trimPrefix(c string, ignores ...string) string {

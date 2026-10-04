@@ -113,16 +113,21 @@ func TestResponseAnnotationsAreCheckedAgainstTheCatalog(t *testing.T) {
 		}
 	}
 
-	if len(rec.records) != 1 {
-		t.Fatalf("got %d diagnostics, want one warning for the corrected status: %v", len(rec.records), rec.records)
+	// Two warnings: the corrected status, and the error the catalog lacks.
+	if len(rec.records) != 2 {
+		t.Fatalf("got %d diagnostics, want a warning for the corrected status and one for the unlisted error: %v", len(rec.records), rec.records)
 	}
-	w := rec.records[0]
-	if w.Level != slog.LevelWarn {
-		t.Errorf("level = %v", w.Level)
+	for _, w := range rec.records {
+		if w.Level != slog.LevelWarn {
+			t.Errorf("level = %v", w.Level)
+		}
 	}
-	attrs := attrsOf(w)
-	if attrs["commentCode"] != "400" || attrs["error"] != "NotFoundErr" || attrs["errorCode"] != "404" {
-		t.Errorf("attributes = %v", attrs)
+	corrected := attrsOf(rec.records[0])
+	if corrected["commentCode"] != "400" || corrected["error"] != "NotFoundErr" || corrected["errorCode"] != "404" {
+		t.Errorf("attributes = %v", corrected)
+	}
+	if unlisted := attrsOf(rec.records[1]); unlisted["error"] != "Unlisted" {
+		t.Errorf("attributes = %v", unlisted)
 	}
 }
 

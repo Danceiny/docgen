@@ -61,7 +61,7 @@ func NewTypeParser(pkg *packages.Package, doc *openapi3.T, sessions ...*Generati
 // ParseAllDecls parses all type declarations of the package.
 func (p *TypeParser) ParseAllDecls() {
 	for _, file := range p.pkg.Syntax {
-		pkgAliases := parseFileImports(file)
+		pkgAliases := parseFileImportsOf(p.pkg, file)
 
 		for _, decl := range file.Decls {
 			// type declarations (such as type User struct)

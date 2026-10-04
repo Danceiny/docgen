@@ -225,7 +225,7 @@ func isNumericString(s string) bool {
 func findTypeRecursive(pkg *packages.Package, typeName string) (map[string]string, ast.Expr) {
 	for _, file := range pkg.Syntax {
 		if t := findTypeInFile(file, typeName); t != nil {
-			return parseFileImports(file), t
+			return parseFileImportsOf(pkg, file), t
 		}
 	}
 	return nil, nil
