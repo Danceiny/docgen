@@ -420,7 +420,8 @@ compat:
   - an embedded struct with a json name is flattened;
   - `validate:"required,email"` does not make a field required, only
     `validate:"required"` does;
-  - `any` is an `object` and `interface{}` a string, an integer or an object;
+  - `any` is an `object` and `interface{}` a string, an integer or an object, and
+    `json.RawMessage` is a string;
   - the values of an enum are the constants declared with the type and a literal,
     so `iota` and expressions give an empty value and a constant that repeats the
     type implicitly is missing, and a `type_map` entry for an enum type is ignored;
@@ -456,8 +457,8 @@ on them.
   that is not in one is loaded when a field uses it, and shares its schema with
   the fields that use it, so that the comment or the example of one of them can
   become its description.
-- `json:",string"` is ignored, a pointer is not nullable unless `json:"x,nullable"`
-  says so, and `json.RawMessage` is a `string` where it is any JSON.
+- `json:",string"` is ignored, and a pointer is not nullable unless
+  `json:"x,nullable"` says so.
 - **Generics are documented as declared**: a field of a type-parameter type has no
   schema, and a generic type with more than one type parameter is not supported.
 - **Query parameters are listed by hand** in `request.query`, not read from the

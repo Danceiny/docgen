@@ -56,6 +56,7 @@ func TestFieldShapesAreReadAsEncodingJSONReadsThem(t *testing.T) {
 
 	assert.Equal(t, []string{"binding", "plain", "several", "spaced", "tagged"}, requiredOf(doc, "Rules"),
 		"a rule among others is a rule: required,email")
+	assert.Nil(t, doc.Components.Schemas[fieldShapesKey+"Raw2"].Value.Properties["body"].Value.Type, "raw JSON is any JSON")
 
 	anything := doc.Components.Schemas[fieldShapesKey+"Anything"].Value.Properties
 	for _, name := range []string{"any", "empty"} {
@@ -98,6 +99,7 @@ func TestFieldShapesOfLegacyDocuments(t *testing.T) {
 	doc := fieldShapes(t, Settings{CompatLegacyOutput: true})
 
 	assert.Equal(t, []string{"Lat", "_"}, propertyNames(doc, "Point"), "the first name of a declaration, and the blank field as a property")
+	assert.True(t, doc.Components.Schemas[fieldShapesKey+"Raw2"].Value.Properties["body"].Value.Type.Is("string"), "raw JSON is a string")
 	assert.Equal(t, []string{"id", "name"}, propertyNames(doc, "Nested"), "an embedded field is flattened whatever its json name")
 	assert.Equal(t, []string{"plain", "tagged"}, requiredOf(doc, "Rules"), "required only as the whole tag")
 

@@ -130,6 +130,9 @@ func getBasicTypeSchema(name string) *openapi3.Schema {
 			return anySchema()
 		case "byte":
 			return BasicTypeSchemas["uint8"] // a byte on its own is a number in JSON
+		case "encoding.json.RawMessage":
+			// It holds JSON of any kind, as it is.
+			return &openapi3.Schema{Description: "JSON"}
 		}
 	}
 	return BasicTypeSchemas[name]

@@ -341,7 +341,7 @@ compat:
   - 一次声明多个名字（`Lat, Lng float64`）只有第一个是字段，空白字段是名为 `_` 的属性；
   - 带 json 名字的内嵌 struct 被展开；
   - `validate:"required,email"` 不会让字段必填，只有 `validate:"required"` 才会；
-  - `any` 是 `object`，`interface{}` 是字符串、整数或对象；
+  - `any` 是 `object`，`interface{}` 是字符串、整数或对象，`json.RawMessage` 是字符串；
   - 枚举的值是用该类型和字面量声明的常量，所以 `iota` 和表达式给出空值，隐式重复类型的常量缺失，
     枚举类型在 `type_map` 里的条目被忽略；
   - map 的值类型丢失（`additionalProperties: true`），字节切片是字符串数组，byte 是字符串；
@@ -362,7 +362,7 @@ docgen 还很年轻。以下限制已知，后续版本会改变，请不要依�
 - 标记 `pattern: default` 出现在 docgen 无法填充的 schema 上：类型参数的列表的元素、不属于它能读取的包的类型。
 - **把你的 API 用到的每个类型所在的包都放进 `models`。** 模块里不在 `models` 中的类型会在字段用到它时才被加载，
   并与使用它的字段共享 schema，所以其中某个字段的注释或示例可能变成它的描述。
-- `json:",string"` 被忽略，指针除非写了 `json:"x,nullable"` 否则不可为 null，`json.RawMessage` 是 `string`（它其实可以是任意 JSON）。
+- `json:",string"` 被忽略，指针除非写了 `json:"x,nullable"` 否则不可为 null。
 - **泛型按声明文档化**：类型参数类型的字段没有 schema，有多个类型参数的泛型类型不受支持。
 - **query 参数是在 `request.query` 里手写的**，不是从 struct 读取的，对每个收该类型的接口都生效。
 - 接口的请求和响应类型必须声明在匹配 `models` 的包里。

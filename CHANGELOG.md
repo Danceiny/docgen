@@ -42,8 +42,8 @@ release.
 - The marker `pattern: default` shows on a schema that docgen could not fill in.
 - A type of the module that is not in `models` shares its schema with the fields
   that use it, so that the comment of one of them can become its description.
-- `json:",string"` is ignored, a pointer is not nullable unless `json:"x,nullable"`
-  says so, and `json.RawMessage` is a `string`.
+- `json:",string"` is ignored, and a pointer is not nullable unless
+  `json:"x,nullable"` says so.
 - A generic type is documented as declared; the fields of a type-parameter type
   have no schema and only one type parameter is supported.
 - Query parameters are listed by hand in `request.query`.

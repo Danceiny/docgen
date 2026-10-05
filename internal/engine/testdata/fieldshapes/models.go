@@ -2,6 +2,8 @@
 // easy to get wrong.
 package fieldshapes
 
+import "encoding/json"
+
 // Base is embedded by the structs below.
 type Base struct {
 	ID string `json:"id"`
@@ -83,4 +85,9 @@ type Holders struct {
 	R Raw     `json:"r"`
 	// Ps are payloads.
 	Ps []Payload `json:"ps"`
+}
+
+// Raw2 holds JSON as it is.
+type Raw2 struct {
+	Body json.RawMessage `json:"body"`
 }
