@@ -85,3 +85,18 @@ func TestLegacyOutputLeavesTheExamplesToTheValidationOfTheDocument(t *testing.T)
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "check the examples")
 }
+
+// A type that docgen could not describe is the placeholder of an object that says
+// nothing about it, and the example of a field of that type is not judged by it:
+// the run has said that the type is not described.
+func TestTheExampleOfAFieldWhoseTypeWasNotDescribedIsNotJudgedByThePlaceholder(t *testing.T) {
+	owner := openapi3.NewObjectSchema()
+	owner.Properties["unknown"] = &openapi3.SchemaRef{Value: &openapi3.Schema{
+		AllOf:   openapi3.SchemaRefs{{Ref: "#/components/schemas/Unknown"}},
+		Example: "red",
+	}}
+	doc := examplesDoc(owner)
+	doc.Components.Schemas["Unknown"] = &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"object"}, Pattern: "default"}}
+	_, err := GenerateYAML(doc, nil)
+	assert.NoError(t, err)
+}

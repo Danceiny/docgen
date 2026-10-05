@@ -62,6 +62,7 @@ func (p *TypeParser) Select(alias, tn string, ctx *ParseContext) *openapi3.Schem
 			defer p.session.LeaveResolving(fk)
 		}
 		externalParser := NewTypeParser(externalPkg, p.doc, p.session)
+		externalParser.onDemand = true
 		var v *openapi3.SchemaRef
 		if !settings.CompatLegacyOutput && strings.HasPrefix(fk, ownKeyPrefix()) {
 			v = externalParser.parseDeclared(fk, tn)
@@ -279,6 +280,13 @@ func (p *TypeParser) parseIdent(ident *ast.Ident, ctx *ParseContext) *openapi3.S
 	}
 	if hasNoSchema(p.pkg, ident.Name) {
 		return nil
+	}
+	if p.onDemand && !settings.CompatLegacyOutput {
+		// Nothing reads this package but through the types that are reached, so what
+		// this one refers to is not described later by anyone else.
+		if described := p.parseDeclared(fullKey, ident.Name); described != nil {
+			return described
+		}
 	}
 	return NewSchemaRefFromFullKey(fullKey)
 }

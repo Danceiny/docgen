@@ -150,10 +150,13 @@ func TestAPlaceholderInADocumentIsReported(t *testing.T) {
 	owner := openapi3.NewObjectSchema()
 	owner.Properties["unknown"] = placeholder().NewRef()
 	owner.Properties["fine"] = openapi3.NewStringSchema().NewRef()
+	union := placeholder() // the marker of documents that keep the old way of writing, next to the alternatives
+	union.OneOf = openapi3.SchemaRefs{{Ref: "#/components/schemas/example.Fine"}}
 	doc := &openapi3.T{Components: &openapi3.Components{Schemas: openapi3.Schemas{
 		"example.Owner": owner.NewRef(),
 		"example.Lost":  placeholder().NewRef(),
 		"example.Fine":  openapi3.NewObjectSchema().NewRef(),
+		"example.Union": union.NewRef(),
 	}}}
 	warnAboutPlaceholders(config.Doc{Name: "internal"}, doc)
 

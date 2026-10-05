@@ -101,7 +101,8 @@ func warnAboutForceKeepsThatNameNoSchema(d config.Doc, doc *openapi3.T) {
 // warnAboutPlaceholders says so for each schema of a document that docgen could
 // not describe and left as its placeholder, an object with the pattern "default",
 // which a reader takes for a description: the type is made of something docgen does
-// not read, or is declared where it cannot be found.
+// not read, or is declared where it cannot be found. A union that has its
+// alternatives is described, whatever else the schema has.
 func warnAboutPlaceholders(d config.Doc, doc *openapi3.T) {
 	seen := map[*openapi3.Schema]bool{}
 	var walk func(where string, ref *openapi3.SchemaRef)
@@ -113,7 +114,7 @@ func warnAboutPlaceholders(d config.Doc, doc *openapi3.T) {
 			return // a reference is looked at where its component is
 		}
 		seen[ref.Value] = true
-		if engine.IsPlaceholder(ref.Value) {
+		if engine.IsPlaceholder(ref.Value) && len(ref.Value.OneOf) == 0 {
 			engine.Logger().Warn("docgen could not describe a type, and the document has the placeholder of an object with the pattern \"default\" for it",
 				"document", d.Name, "in", where)
 			return

@@ -135,6 +135,12 @@ type Box[T any] struct {
 	Note string `json:"note"`
 }
 
+// Box2 lists its candidates with a space after each comma, and a text after them.
+type Box2[T any] struct {
+	// @generic: Base, Inner, OuterFirst; the payload
+	Data T `json:"data"`
+}
+
 // NamesList is a list type, embedded below.
 type NamesList []string
 

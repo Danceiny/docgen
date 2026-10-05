@@ -64,6 +64,10 @@ func ExtractTagFromComments(comments []string, tagName string) string {
 // extractDescription extracts the description text from comments.
 func extractDescription(docs, comments *ast.CommentGroup) (out string) {
 	ignores := []string{"@generic:"}
+	if !settings.CompatLegacyOutput {
+		// the line that makes an interface a union is not what it says of itself
+		ignores = append(ignores, "@autowire:")
+	}
 	d1, d2 := extractCommentGroupText(docs, ignores...), extractCommentGroupText(comments, ignores...)
 	return strings.Join(filter([]string{strings.TrimSpace(d1), strings.TrimSpace(d2)}, func(s string) bool {
 		return s != ""
@@ -80,7 +84,20 @@ func extractDescriptionRaw(docs, comments *ast.CommentGroup) (out string) {
 
 func extractTagValueFromDocComments(docs, comments *ast.CommentGroup, tagName string) (out []string) {
 	desc := extractDescriptionRaw(docs, comments)
-	return filter(strings.Split(ExtractTag(desc, tagName), ","), func(s string) bool {
+	value := ExtractTag(desc, tagName)
+	if settings.CompatLegacyOutput {
+		return filter(strings.Split(value, ","), func(s string) bool {
+			return s != ""
+		})
+	}
+	// The values are on the line of the annotation, a comma and a space apart, and
+	// what follows a semicolon is the text that goes with them.
+	value, _, _ = strings.Cut(strings.SplitN(value, "\n", 2)[0], ";")
+	values := strings.Split(value, ",")
+	for i := range values {
+		values[i] = strings.TrimSpace(values[i])
+	}
+	return filter(values, func(s string) bool {
 		return s != ""
 	})
 }

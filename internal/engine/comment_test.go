@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"reflect"
 	"testing"
 )
 
@@ -167,5 +168,63 @@ func TestParamCommentWithAndWithoutADescription(t *testing.T) {
 	}
 	if got := m.parseParamComment(doc, "absent"); got != nil {
 		t.Fatalf("absent = %+v", got)
+	}
+}
+
+// The types an annotation lists are separated by a comma, with a space after it or
+// not; what follows a semicolon goes with them, and the lines after the annotation
+// are not part of it. Documents that keep the old way of writing read the line as
+// it is.
+func TestTheValuesOfAnAnnotationAreTrimmedAndEndAtTheSemicolon(t *testing.T) {
+	src := "package p\n" +
+		"type T struct {\n" +
+		"\t// @generic: Product, Order\n" +
+		"\tSpace any\n" +
+		"\t// @generic: Product,Order\n" +
+		"\tNoSpace any\n" +
+		"\t// @generic: Product,  Order ,Refund; the data of the answer\n" +
+		"\tSemicolon any\n" +
+		"\t// @generic: Product, Order\n" +
+		"\t// and more of what is said about it\n" +
+		"\tMore any\n" +
+		"\t// @generic: ,Product,,\n" +
+		"\tEmpties any\n" +
+		"\t// @autowire: true; the types that implement it\n" +
+		"\tUnion any\n" +
+		"}\n"
+	node, err := parser.ParseFile(token.NewFileSet(), "", src, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := map[string]*ast.Field{}
+	ast.Inspect(node, func(n ast.Node) bool {
+		if st, ok := n.(*ast.StructType); ok {
+			for _, field := range st.Fields.List {
+				fields[field.Names[0].Name] = field
+			}
+		}
+		return true
+	})
+
+	want := map[string][]string{
+		"Space":     {"Product", "Order"},
+		"NoSpace":   {"Product", "Order"},
+		"Semicolon": {"Product", "Order", "Refund"},
+		"More":      {"Product", "Order"},
+		"Empties":   {"Product"},
+	}
+	for name, values := range want {
+		got := extractTagValueFromDocComments(fields[name].Doc, fields[name].Comment, "generic")
+		if !reflect.DeepEqual(got, values) {
+			t.Errorf("%s: %q, want %q", name, got, values)
+		}
+	}
+	if got := extractTagValueFromDocComments(fields["Union"].Doc, nil, "autowire"); !reflect.DeepEqual(got, []string{"true"}) {
+		t.Errorf("autowire: %q, want [true]", got)
+	}
+
+	withSettings(t, Settings{CompatLegacyOutput: true}, "example.com/p")
+	if got := extractTagValueFromDocComments(fields["Space"].Doc, nil, "generic"); !reflect.DeepEqual(got, []string{"Product", " Order"}) {
+		t.Errorf("legacy: %q, want the line as it is written", got)
 	}
 }

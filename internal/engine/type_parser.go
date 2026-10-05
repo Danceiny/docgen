@@ -29,8 +29,12 @@ type TypeParser struct {
 	defers   *list.List
 	// mergeTasks are the MergeTasks, to run until they change nothing, and then the
 	// FinalTasks, in the order they were made.
-	mergeTasks  *list.List
-	valueCheck  *valueChecker // for a parser that has no session
+	mergeTasks *list.List
+	valueCheck *valueChecker // for a parser that has no session
+	// onDemand is set on the parser of a package that no pattern of models matches,
+	// which describes the types of the package that a type of another package reaches
+	// and no more: nothing else reads the rest of it.
+	onDemand    bool
 	activeTypes map[string]bool
 	activeMu    sync.Mutex
 	// embedding holds the structs whose field names are being collected.

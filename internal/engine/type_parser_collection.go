@@ -161,7 +161,15 @@ func (p *TypeParser) parseInterface(expr *ast.InterfaceType, ctx *ParseContext) 
 	}
 	ref := defaultSchemaRef()
 	if len(autowire) > 0 && strings.TrimSpace(strings.SplitN(autowire[0], "\n", 2)[0]) == "true" {
-		for _, impl := range findImplementations(p.pkg, expr) {
+		impls := findImplementations(p.pkg, expr)
+		if !settings.CompatLegacyOutput && len(impls) > 0 {
+			// The union is not a placeholder: a field that refers to the interface
+			// after it is declared and before the alternatives are added would take
+			// it for one, parse the type again, and leave the alternatives with
+			// nothing to be added to.
+			ref = &openapi3.SchemaRef{Value: &openapi3.Schema{}}
+		}
+		for _, impl := range impls {
 			impl := impl
 			p.defers.PushFront(func() {
 				if ref.Value == nil {

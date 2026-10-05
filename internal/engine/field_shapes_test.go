@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -283,6 +284,15 @@ func TestTheCandidatesOfAGenericFieldAreNotItsDescription(t *testing.T) {
 	data := doc.Components.Schemas[fieldShapesKey+"Box"].Value.Properties["data"]
 	require.NotNil(t, data)
 	assert.Equal(t, "Data is the payload.", data.Value.Description)
+
+	spaced := doc.Components.Schemas[fieldShapesKey+"Box2"].Value.Properties["data"]
+	require.NotNil(t, spaced)
+	var candidates []string
+	for _, alternative := range spaced.Value.OneOf {
+		candidates = append(candidates, strings.TrimPrefix(alternative.Ref, "#/components/schemas/"+fieldShapesKey))
+	}
+	assert.Equal(t, []string{"Base", "Inner", "OuterFirst"}, candidates, "a space after a comma does not lose a candidate")
+	assert.Equal(t, "the payload", spaced.Value.Description, "and the text after the semicolon is the description")
 }
 
 func TestAnEmbeddedTypeThatIsNotAStructIsAFieldNamedAfterIt(t *testing.T) {
@@ -351,4 +361,53 @@ func TestExamplesOfFieldsWhoseTypesAreDeclaredLaterAreJudgedByThoseTypes(t *test
 		"badTags":  `["bogus"]`,
 		"badChild": `{"name":"n"}`,
 	}, rejected, "and each is said, with the field")
+}
+
+// A union, an interface that says @autowire: true, is made of the types that
+// implement it, whether a field that uses it comes before or after its
+// declaration, and however many do: a use that comes after the declaration must
+// not leave the union with nothing to add the alternatives to.
+func TestAUnionHasItsAlternativesWhateverTheOrderOfItsUses(t *testing.T) {
+	logs := captureLogs(t)
+	withSettings(t, Settings{}, "github.com/Danceiny/docgen")
+	pkg := loadFixture(t, "testdata/autowire")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "union", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+	const prefix = "github.com.Danceiny.docgen.internal.engine.testdata.autowire."
+
+	for name, want := range map[string][]string{
+		"Early": {prefix + "Alpha", prefix + "Beta"},
+		"Late":  {prefix + "Delta", prefix + "Gamma"},
+	} {
+		union := doc.Components.Schemas[prefix+name]
+		require.NotNil(t, union, name)
+		var got []string
+		for _, alternative := range union.Value.OneOf {
+			got = append(got, strings.TrimPrefix(alternative.Ref, "#/components/schemas/"))
+		}
+		sort.Strings(got)
+		assert.Equal(t, want, got, name)
+		assert.Nil(t, union.Value.Type, "%s is the union, not an object", name)
+		assert.Empty(t, union.Value.Pattern, "%s is not the placeholder of a type docgen could not fill in", name)
+		assert.Equal(t, name+" is a union that is declared "+map[string]string{"Early": "before", "Late": "after"}[name]+" the struct that uses it.", union.Value.Description,
+			"the line that makes it a union is not part of what it says")
+	}
+
+	lonely := doc.Components.Schemas[prefix+"Lonely"]
+	require.NotNil(t, lonely)
+	assert.True(t, IsPlaceholder(lonely.Value), "a union that nothing implements is the placeholder it always was")
+	for _, rec := range logs.records {
+		assert.NotContains(t, rec.Message, "no schema", "the implementations of a union have schemas")
+	}
+
+	legacy := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "union", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	withSettings(t, Settings{CompatLegacyOutput: true}, "github.com/Danceiny/docgen")
+	defers, mergeTasks = processModelsFor(pkg, legacy, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, legacy)
+	union := legacy.Components.Schemas[prefix+"Late"]
+	require.NotNil(t, union)
+	assert.Len(t, union.Value.OneOf, 2)
+	assert.Equal(t, "default", union.Value.Pattern, "documents that keep the old way of writing have the marker next to the alternatives")
+	assert.Contains(t, union.Value.Description, "@autowire: true", "and the line")
 }

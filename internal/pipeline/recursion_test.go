@@ -496,6 +496,42 @@ func TestATypeOutsideModelsIsDescribedByItsDeclaration(t *testing.T) {
 	assert.True(t, strings.HasPrefix(dur.Description, "Dur is an enum of durations."))
 }
 
+// A type of a package that no pattern of models matches is described when it is
+// reached through another type of that package, not only when a type of a model
+// package refers to it: nothing else ever reads the package, and a type that was
+// not described would be the placeholder of an object with the pattern "default".
+func TestTypesOfAPackageOutsideModelsAreDescribedThroughEachOther(t *testing.T) {
+	cfg, err := config.Load("testdata/ondemand/docgen.yaml")
+	require.NoError(t, err)
+	log := &records{}
+	out := t.TempDir()
+	require.NoError(t, Run(Options{Dir: "testdata/ondemand", Config: cfg, OutputDir: out, Logger: slog.New(log)}))
+	for _, rec := range log.list {
+		assert.NotContains(t, rec.Message, "could not describe a type", "%s", attrOf(rec, "in"))
+	}
+
+	doc := generateFixture(t, "testdata/ondemand", "internal")
+	place := doc.Components.Schemas[ondemandPrefix+"Place"]
+	require.NotNil(t, place, "Place is a type of the package that models does not match, reached through Thing")
+	assert.NotEqual(t, "default", place.Value.Pattern)
+	assert.Equal(t, []string{"byName", "country", "geo", "owner", "parent", "tags"}, propertyNames(place))
+
+	country := doc.Components.Schemas[ondemandPrefix+"Country"]
+	require.NotNil(t, country)
+	assert.Equal(t, []any{"AE", "GB"}, country.Value.Enum, "an enum two types away from a model is an enum")
+	assert.Equal(t, "AE", place.Value.Properties["country"].Value.Example, "and an example of it is judged by it")
+	assert.Equal(t, "AE", place.Value.Properties["country"].Value.Default)
+
+	for _, name := range []string{"Geo", "Tag"} {
+		described := doc.Components.Schemas[ondemandPrefix+name]
+		require.NotNil(t, described, name)
+		assert.NotEqual(t, "default", described.Value.Pattern, name)
+		assert.Contains(t, described.Value.Properties, map[string]string{"Geo": "lat", "Tag": "name"}[name], name)
+	}
+	assert.Equal(t, "#/components/schemas/"+ondemandPrefix+"Place", place.Value.Properties["parent"].Ref, "a type that contains itself is a reference to itself")
+	assert.Equal(t, "#/components/schemas/"+ondemandPrefix+"Tag", place.Value.Properties["tags"].Value.Items.Ref)
+}
+
 // A type that docgen could not describe is left as its placeholder, and the run
 // says so: nothing in the document says that an object with the pattern "default"
 // is not a description.

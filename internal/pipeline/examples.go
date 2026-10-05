@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
+
+	"github.com/Danceiny/docgen/internal/engine"
 )
 
 // checkExamples fails when the example or the default of a schema is not a value
@@ -17,8 +19,16 @@ import (
 // where it is.
 //
 // It has to be done before the references are cut (see cutReferences). Every
-// schema is looked at once.
+// schema is looked at once. The document is the one that was loaded back from what
+// is written to be validated, and is changed: a type that docgen could not
+// describe is a placeholder, which stands for nothing known and allows any value,
+// and the run has said which types they are.
 func checkExamples(doc *openapi3.T) error {
+	for _, component := range doc.Components.Schemas {
+		if component != nil && component.Ref == "" && component.Value != nil && engine.IsPlaceholder(component.Value) && len(component.Value.OneOf) == 0 {
+			*component.Value = openapi3.Schema{}
+		}
+	}
 	seen := map[*openapi3.Schema]bool{}
 	var walk func(where string, ref *openapi3.SchemaRef) error
 	walk = func(where string, ref *openapi3.SchemaRef) error {
