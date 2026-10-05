@@ -1,0 +1,6 @@
+version: 1
+schemas:
+  example.com.hiddenref.m.Holder:
+    type: object
+    properties:
+      raw: {$ref: '#/components/schemas/example.com.hiddenref.m.InternalThing'}

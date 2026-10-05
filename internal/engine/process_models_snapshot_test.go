@@ -651,6 +651,13 @@ func TestProcessModels_GenericDeclarationsHaveNoComponentsBesidesTheirOwn(t *tes
 	assert.Equal(t, "#/components/schemas/"+prefix+"Wrap", basket["a"].Ref)
 	assert.Equal(t, "#/components/schemas/"+prefix+"Wrap", basket["b"].Ref)
 	assert.NotContains(t, basket["a"].Value.Title, "[", "nor does what the field holds of it")
+	tagged := doc.Components.Schemas[prefix+"Tagged"].Value.Properties["v"]
+	assert.Empty(t, tagged.Ref, "a field of a type parameter that has candidates is not a reference to its constraint")
+	var alternatives []string
+	for _, alternative := range tagged.Value.OneOf {
+		alternatives = append(alternatives, strings.TrimPrefix(alternative.Ref, "#/components/schemas/"+prefix))
+	}
+	assert.Equal(t, []string{"Apple", "Pear"}, alternatives, "and the constraint is not one of the alternatives")
 	assert.NotContains(t, doc.Components.Schemas[prefix+"Tagged"].Value.Properties["v"].Value.Title, "[", "the candidates of a field are its alternatives, not part of a title")
 	assert.True(t, doc.Components.Schemas[prefix+"Page"].Value.Properties["items"].Value.Items.Value.Type == nil, "a list of a type parameter is a list of anything")
 	assert.Equal(t, "#/components/schemas/"+prefix+"Num", doc.Components.Schemas[prefix+"Boxed"].Value.Properties["v"].Ref)

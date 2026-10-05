@@ -66,6 +66,7 @@ func buildDoc(d config.Doc, cfg *config.Config, first bool, loader *moduleLoader
 	}
 	if first {
 		warnAboutTypeKeysThatNameNoType(cfg, session)
+		warnAboutGenericTitlesThatDoNothing(cfg)
 	}
 	warnAboutPatternsThatMatchNothing(d, session.Packages())
 	if err := GenerateModels(doc, d.Models, nil, session); err != nil {

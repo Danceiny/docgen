@@ -201,7 +201,8 @@ The named types of the `models` packages become **components**
 - `time.Time` is a `date-time` string and `time.Duration` an `int64` number of
   nanoseconds, as JSON writes them. `type_map` says otherwise, and what it says of
   a type is what the type is where it is used, whatever order its declaration comes
-  in; a type of the module that it names is a component all the same.
+  in; a type of the module that it names, in a package that `models` matches, is a
+  component all the same.
 
 ### Who sees what
 
@@ -509,10 +510,13 @@ on them.
   about each one.
 - `json:",string"` is ignored, and a pointer is not nullable unless
   `json:"x,nullable"` says so.
-- Two embedded structs that have a field with the same JSON name, at the same depth,
-  are an ambiguity that encoding/json answers by writing neither. docgen
-  describes one of them, and which one can depend on the order the declarations
-  come in.
+- Two embedded structs that have a field with the same JSON name are an ambiguity
+  that encoding/json answers by letting the shallower field win and, at the same
+  depth, by writing neither. docgen describes one of them, and which one can depend
+  on the order the declarations come in.
+- A field of a type that is declared as another type of the module (`type A B`,
+  `type A = B`) refers to A or to B, depending on which of the two declarations
+  comes first in the source. Both describe the same schema.
 - The constants of an enum must be declared in the package of the type.
 - **Generics are documented as declared**, as said above: only one type parameter
   is supported, a type-parameter field without `@generic` has no schema, and a

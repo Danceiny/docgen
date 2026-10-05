@@ -82,6 +82,13 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 		if isGeneric {
 			fieldCtx.GenericTypes = ctx.GenericTypes
 			genericComm = append(genericComm, ctx.GenericTypes...)
+			if !settings.CompatLegacyOutput {
+				// What the field may be is what its comment lists, and not the constraint
+				// of the type parameter, which every type it may be satisfies.
+				genericComm = filter(append(tagdocGenerics, ctx.GenericTypes...), func(s string) bool {
+					return s != "" && s != "any" && s != "T"
+				})
+			}
 			ft = fieldCtx.GenericValue
 		}
 
@@ -131,7 +138,15 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 			continue
 		}
 
-		fieldSchema := p.parse(ft, fieldCtx)
+		var fieldSchema *openapi3.SchemaRef
+		if isGeneric && len(dedupe(genericComm)) > 0 && !settings.CompatLegacyOutput {
+			// The field is one of the types its comment lists and nothing else: not a
+			// reference to the constraint of the type parameter, whose alternatives would
+			// have nowhere to be written.
+			fieldSchema = &openapi3.SchemaRef{Value: &openapi3.Schema{Nullable: isNullableFromField(field)}}
+		} else {
+			fieldSchema = p.parse(ft, fieldCtx)
+		}
 		if fieldSchema == nil {
 			Logger().Debug("field has no schema and is left out", "field", field.Names[0].Name, "fieldType", types.ExprString(ft), "at", p.at(field))
 			continue
@@ -217,7 +232,9 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 					}
 				}
 				titles = dedupe(titles)
-				if settings.CompatLegacyOutput && fieldSchema.Value.Title != "" {
+				// Only a field that was parsed has a title. Outside legacy output a field of
+				// a type parameter that has candidates is not parsed, and has none.
+				if fieldSchema.Value.Title != "" {
 					fieldSchema.Value.Title = fieldSchema.Value.Title + "[" + strings.Join(titles, ",") + "]"
 				}
 			})

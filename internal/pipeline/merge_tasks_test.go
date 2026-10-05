@@ -204,3 +204,21 @@ func TestTheTypeAGenericTitleNamesIsWhatComesBeforeItsBrackets(t *testing.T) {
 		t.Errorf("keys = %q, want %q", got, want)
 	}
 }
+
+// generic_titles is read only by the documents of a configuration that keeps
+// compat.legacy_output; where it is not, saying so is better than doing nothing.
+func TestGenericTitlesThatDoNothingAreReported(t *testing.T) {
+	log := &records{}
+	engine.SetLogger(slog.New(log))
+	t.Cleanup(func() { engine.SetLogger(nil) })
+
+	warnAboutGenericTitlesThatDoNothing(&config.Config{})
+	warnAboutGenericTitlesThatDoNothing(&config.Config{GenericTitles: []string{"example.Page"}, Compat: config.Compat{LegacyOutput: true}})
+	if len(log.list) != 0 {
+		t.Fatalf("reported %d, want none: no titles, or a configuration that reads them", len(log.list))
+	}
+	warnAboutGenericTitlesThatDoNothing(&config.Config{GenericTitles: []string{"example.Page"}})
+	if len(log.list) != 1 || log.list[0].Level != slog.LevelWarn || attrOf(log.list[0], "titles") != "1" {
+		t.Fatalf("reported %v, want one warning that says how many titles do nothing", log.list)
+	}
+}

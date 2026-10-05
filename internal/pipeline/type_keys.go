@@ -79,6 +79,18 @@ func warnAboutTypeKeysThatNameNoType(cfg *config.Config, session *engine.Generat
 	}
 }
 
+// warnAboutGenericTitlesThatDoNothing says so for generic_titles in a
+// configuration that does not keep compat.legacy_output: only the documents of
+// one have titles that carry type arguments, so no oneOf is narrowed by them and
+// there is nothing to keep whole.
+func warnAboutGenericTitlesThatDoNothing(cfg *config.Config) {
+	if len(cfg.GenericTitles) == 0 || cfg.Compat.LegacyOutput {
+		return
+	}
+	engine.Logger().Warn("generic_titles does nothing unless compat.legacy_output is on: the titles of the documents of a configuration that does not keep it carry no type arguments, so no oneOf is narrowed by them",
+		"titles", len(cfg.GenericTitles))
+}
+
 // warnAboutForceKeepsThatNameNoSchema says so for each schema that force_keep
 // keeps although the document has no schema of that key.
 func warnAboutForceKeepsThatNameNoSchema(d config.Doc, doc *openapi3.T) {

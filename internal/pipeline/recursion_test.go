@@ -633,21 +633,24 @@ func TestATypeDeclaredAsAHiddenTypeIsHiddenWhateverItsDirectiveSays(t *testing.T
 
 // A reference to a type that the document hides, from an overlay, cannot be
 // written: the type has no schema. The error says that the type is hidden, not
-// that the package of the type does not match models.
+// that the package of the type does not match models. A configuration that keeps
+// legacy_output has always been told the latter.
 func TestAReferenceToAHiddenTypeIsExplainedByItsBeingHidden(t *testing.T) {
-	cfg, err := config.Load("testdata/hiding/docgen-overlay.yaml")
-	require.NoError(t, err)
-	err = Run(Options{Dir: "testdata/hiding", Config: cfg, OutputDir: t.TempDir()})
+	run := func(file string) error {
+		cfg, err := config.Load("testdata/hiddenref/" + file)
+		require.NoError(t, err)
+		return Run(Options{Dir: "testdata/hiddenref", Config: cfg, OutputDir: t.TempDir()})
+	}
+
+	err := run("docgen.yaml")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "example.com.hiding.domain.InternalBefore")
+	assert.Contains(t, err.Error(), "example.com.hiddenref.m.InternalThing")
 	assert.Contains(t, err.Error(), "the document hides that type")
 	assert.NotContains(t, err.Error(), `pattern of "models"`)
 
-	// A configuration that keeps legacy_output has always been told what it is told.
-	legacy, err := config.Load("testdata/hiding/docgen-overlay-legacy.yaml")
-	require.NoError(t, err)
-	err = Run(Options{Dir: "testdata/hiding", Config: legacy, OutputDir: t.TempDir()})
-	require.Error(t, err)
+	err = run("docgen-legacy.yaml")
+	require.Error(t, err, "the reference dangles in both")
+	assert.Contains(t, err.Error(), "example.com.hiddenref.m.InternalThing")
 	assert.Contains(t, err.Error(), `pattern of "models"`)
 	assert.NotContains(t, err.Error(), "the document hides that type")
 }

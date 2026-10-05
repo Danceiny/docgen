@@ -43,8 +43,11 @@ release.
   with a warning.
 - `json:",string"` is ignored, and a pointer is not nullable unless
   `json:"x,nullable"` says so.
-- Two embedded structs that have a field with the same JSON name at the same
-  depth: encoding/json writes neither, docgen describes one of them.
+- Two embedded structs that have a field with the same JSON name: encoding/json lets
+  the shallower one win and writes neither at the same depth, docgen describes one
+  of them.
+- A field of a type declared as another type of the module (`type A B`) refers to
+  A or to B, depending on which declaration comes first in the source.
 - The constants of an enum must be declared in the package of the type.
 - A generic type is documented as declared; only one type parameter is supported,
   an instance of it is the generic type, whatever its type arguments are, and a list

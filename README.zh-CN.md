@@ -144,7 +144,7 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
   除非它的注释列出它可能的类型（`@generic: Product, Order`），这时它是所有这些组件的 `oneOf`，对每个实例都一样。
   带方法的接口可以是任意 JSON 值，除非它的注释写了 `@autowire: true`，这时它是同包中实现它的类型的 `oneOf`。
 - `time.Time` 是 `date-time` 字符串，`time.Duration` 是 `int64` 纳秒数，与 JSON 的写法一致。要改用 `type_map`。
-  `type_map` 对一个类型的说法，就是这个类型在用到它的地方的样子，不管它的声明在前还是在后；它点名的本模块类型照样是一个组件。
+  `type_map` 对一个类型的说法，就是这个类型在用到它的地方的样子，不管它的声明在前还是在后；它点名的、在 `models` 匹配的包里的本模块类型照样是一个组件。
 
 ### 谁能看到什么
 
@@ -388,8 +388,10 @@ docgen 还很年轻。以下限制已知，后续版本会改变，请不要依�
   所以写出来的形式与 Go 形状不同的类型（`net.IP`、`big.Int`、字节数组的 UUID）需要 `type_map` 条目。
 - 标记 `pattern: default` 出现在 docgen 无法填充的 schema 上，比如没有任何实现的 `@autowire` 接口；每一处都有警告。
 - `json:",string"` 被忽略，指针除非写了 `json:"x,nullable"` 否则不可为 null。
-- 两个内嵌 struct 在同一层有同名的 JSON 字段，是 encoding/json 以两个都不写来回答的歧义；docgen 只描述其中一个，
+- 两个内嵌 struct 有同名的 JSON 字段，是 encoding/json 以较浅的那个为准、同一层则两个都不写来回答的歧义；docgen 只描述其中一个，
   是哪一个可能取决于声明的先后顺序。
+- 声明为本模块另一个类型的类型（`type A B`、`type A = B`）的字段，引用的是 A 还是 B，取决于这两个声明在源码里谁在前。
+  两者描述的是同一个 schema。
 - 枚举的常量必须声明在该类型所在的包里。
 - **泛型按声明文档化**，如上所述：只支持一个类型参数，没有 `@generic` 的类型参数字段没有 schema，
   类型参数的列表（`Items []T`）是任意类型的列表，不管实例的类型实参是什么。
