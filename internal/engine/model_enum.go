@@ -165,6 +165,7 @@ func collectEnumEntriesByType(pkg *packages.Package, typeName string) ([]EnumEnt
 		return nil, false
 	}
 	var entries []EnumEntry
+	seen := map[string]bool{}
 	// in the order of the source: the files of the package, then the declarations
 	for _, file := range pkg.Syntax {
 		for _, decl := range file.Decls {
@@ -180,12 +181,20 @@ func collectEnumEntriesByType(pkg *packages.Package, typeName string) ([]EnumEnt
 				}
 				for _, name := range valueSpec.Names {
 					c, ok := pkg.TypesInfo.Defs[name].(*types.Const)
-					if !ok || name.Name == "_" || !types.Identical(c.Type(), typeObj.Type()) {
+					if !ok || !name.IsExported() || !types.Identical(c.Type(), typeObj.Type()) {
+						// A blank constant is no value, and an unexported one is
+						// not part of what a client sees: the sentinels that count
+						// the values (statusCount) are the usual such constants.
 						continue
 					}
+					value := constantText(c.Val())
+					if seen[value] {
+						continue // a constant that is another name for a value is not another value
+					}
+					seen[value] = true
 					entries = append(entries, EnumEntry{
 						Name:    name.Name,
-						Value:   constantText(c.Val()),
+						Value:   value,
 						Doc:     blockDocComments,
 						Comment: strings.TrimPrefix(extractDescription(valueSpec.Doc, valueSpec.Comment), name.Name+" "),
 					})

@@ -113,10 +113,13 @@ func Check(opts Options) ([]Drift, error) {
 			drifts = append(drifts, Drift{d.Name, d.Output, "does not exist"})
 		case err != nil:
 			return nil, err
-		case !bytes.Equal(fresh, bytes.ReplaceAll(onDisk, []byte("\r\n"), []byte("\n"))):
+		default:
 			// A checkout that turns line feeds into carriage returns and line feeds
 			// (core.autocrlf on Windows) has not made the document stale.
-			drifts = append(drifts, Drift{d.Name, d.Output, describeDifference(onDisk, fresh)})
+			onDisk = bytes.ReplaceAll(onDisk, []byte("\r\n"), []byte("\n"))
+			if !bytes.Equal(fresh, onDisk) {
+				drifts = append(drifts, Drift{d.Name, d.Output, describeDifference(onDisk, fresh)})
+			}
 		}
 	}
 	return drifts, nil

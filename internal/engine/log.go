@@ -32,3 +32,13 @@ func Logger() *slog.Logger {
 
 // goType renders the dynamic type of v, the %T of a diagnostic.
 func goType(v any) string { return fmt.Sprintf("%T", v) }
+
+// warnAt reports a problem at a place in the source, once in a run: the same
+// warning, about the same thing at the same place, is not told again for each
+// document that is built, or each time the place is read.
+func warnAt(msg string, args ...any) {
+	if !firstTime(msg, fmt.Sprint(args...)) {
+		return
+	}
+	Logger().Warn(msg, args...)
+}

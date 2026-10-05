@@ -62,6 +62,8 @@ func warnAboutPatternsThatMatchNothing(d config.Doc, pkgs []*packages.Package) {
 					continue // the list names both layouts, one of them is not the module's
 				}
 				msg += ", so " + pattern + " does not match the package " + rest + " at the module root; list " + rest + " too"
+			} else if slices.Contains(field.patterns, "*/"+pattern) {
+				continue // likewise: the module has directories above it, and the root package is the other layout
 			}
 			engine.Logger().Warn(msg, "document", d.Name, "list", field.name, "pattern", pattern)
 		}

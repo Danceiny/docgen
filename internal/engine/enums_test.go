@@ -82,3 +82,38 @@ func TestTypeMapGivesAnEnumItsSchema(t *testing.T) {
 		})
 	}
 }
+
+func enumSchema(t *testing.T, name string) *openapi3.Schema {
+	t.Helper()
+	withSettings(t, Settings{}, "github.com/Danceiny/docgen")
+	pkg := loadFixture(t, "testdata/enums")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "enums", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+	ref := doc.Components.Schemas["github.com.Danceiny.docgen.internal.engine.testdata.enums."+name]
+	require.NotNil(t, ref, name)
+	return ref.Value
+}
+
+// An enum is made of what the compiler says it is made of: a byte, a rune, a
+// pointer-sized integer, a duration and another enum of the module all give the
+// numbers or the strings they are, and the values of an enum are different.
+func TestEnumsOfOrdinaryDeclarations(t *testing.T) {
+	for name, want := range map[string]struct {
+		typ    string
+		values []any
+	}{
+		"Raw":     {"integer", []any{uint64(97), uint64(2)}},
+		"Letter":  {"integer", []any{int64(122)}},
+		"Up":      {"integer", []any{uint64(1)}},
+		"Dur":     {"integer", []any{int64(1000000000), int64(3600000000000)}},
+		"Wrapped": {"string", []any{"w1"}},
+		"Dup":     {"integer", []any{int64(0), int64(1)}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			schema := enumSchema(t, name)
+			assert.True(t, schema.Type.Is(want.typ), "%s is %v", name, schema.Type)
+			assert.Equal(t, want.values, schema.Enum)
+		})
+	}
+}

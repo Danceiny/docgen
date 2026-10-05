@@ -227,7 +227,7 @@ func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.S
 	case *ast.IndexExpr:
 		fk, schema = p.parseIndexExpr(fk, t, ctx)
 	case *ast.IndexListExpr:
-		Logger().Warn("generic type with several type arguments is not supported", "key", fk, "at", p.at(t))
+		warnAt("generic type with several type arguments is not supported", "key", fk, "at", p.at(t))
 	case *ast.StarExpr:
 		schema = p.parsePointer(t, ctx)
 	case *ast.ArrayType:
@@ -248,7 +248,7 @@ func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.S
 		// No schema describes a function or a channel.
 		return nil
 	default:
-		Logger().Warn("type expression has no rule", "key", fk, "expr", goType(t), "at", p.at(t))
+		warnAt("type expression has no rule", "key", fk, "expr", goType(t), "at", p.at(t))
 		return nil
 	}
 	// copyRef cannot be used here

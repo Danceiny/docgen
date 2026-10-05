@@ -2,12 +2,22 @@ package engine
 
 import (
 	"go/ast"
+	"go/types"
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"golang.org/x/tools/go/packages"
 )
 
 func (p *TypeParser) handleSchema(typeSpec *ast.TypeSpec, fullKey string, schema *openapi3.SchemaRef, underlyingType string) {
+	if !settings.CompatLegacySchemaShapes {
+		// What the type is made of is what the compiler says, not what the
+		// declaration happens to call it: byte and uint8 are the same, and a type
+		// declared as another type of the module is made of what that is made of.
+		if name := underlyingBasicName(p.pkg, typeSpec); name != "" {
+			underlyingType = name
+		}
+	}
 	// should the enum be hidden?
 	if shouldHideType(p.pkg, typeSpec, p.audience) {
 		schema = generateHiddenSchema(underlyingType)
@@ -134,4 +144,30 @@ func searchSchemaFromDoc(doc *openapi3.T, key string) *openapi3.SchemaRef {
 		return nil
 	}
 	return doc.Components.Schemas[best]
+}
+
+// underlyingBasicName is the name of the basic type that a declared type is made
+// of, with the names that are other names for it resolved (byte is uint8, rune
+// is int32), or "" when it is made of something else or the package has no type
+// information.
+func underlyingBasicName(pkg *packages.Package, typeSpec *ast.TypeSpec) string {
+	if pkg == nil || pkg.TypesInfo == nil {
+		return ""
+	}
+	obj, ok := pkg.TypesInfo.Defs[typeSpec.Name].(*types.TypeName)
+	if !ok {
+		return ""
+	}
+	basic, ok := obj.Type().Underlying().(*types.Basic)
+	if !ok {
+		return ""
+	}
+	switch kind := basic.Kind(); kind {
+	case types.Uintptr:
+		return "uint64"
+	case types.UnsafePointer, types.Complex64, types.Complex128, types.Invalid:
+		return ""
+	default:
+		return types.Typ[kind].Name()
+	}
 }

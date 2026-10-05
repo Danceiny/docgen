@@ -110,7 +110,7 @@ func (p *TypeParser) parseArray(expr *ast.ArrayType, ctx *ParseContext) *openapi
 			elementRef = defaultSchemaRef()
 		}
 		if elementRef == nil {
-			Logger().Warn("array element type is unknown, using the default schema",
+			warnAt("array element type is unknown, using the default schema",
 				"element", types.ExprString(expr.Elt), "at", p.at(expr))
 			elementRef = defaultSchemaRef()
 		}

@@ -1,6 +1,8 @@
 // Package enums is a fixture: the ways a Go enum is declared.
 package enums
 
+import "time"
+
 // Priority repeats its type implicitly after the first constant.
 type Priority int
 
@@ -53,3 +55,51 @@ const (
 
 // Plain has no constants.
 type Plain string
+
+// Raw is made of a byte, and Letter of a rune: the values are numbers.
+type Raw byte
+
+// The raw values.
+const (
+	RawA Raw = 'a'
+	RawB Raw = 2
+)
+
+// Letter is made of a rune.
+type Letter rune
+
+// LetterA is a letter.
+const LetterA Letter = 'z'
+
+// Up is made of a pointer-sized unsigned integer.
+type Up uintptr
+
+// UpOne is the one.
+const UpOne Up = 1
+
+// Dur is made of a time.Duration, which is an int64.
+type Dur time.Duration
+
+// The durations.
+const (
+	DurShort Dur = Dur(time.Second)
+	DurLong  Dur = Dur(time.Hour)
+)
+
+// Wrapped is declared as another enum of the package, so it is made of a string.
+type Wrapped Name
+
+// W1 is a wrapped name.
+const W1 Wrapped = "w1"
+
+// Dup has constants that are other names for a value, and a sentinel.
+type Dup int
+
+// The dups.
+const (
+	DupA Dup = iota
+	DupB
+	DupAlias     = DupB
+	DupMax   Dup = DupB
+	dupCount
+)

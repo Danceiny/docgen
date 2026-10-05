@@ -109,11 +109,11 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
 - The route is `<prefix>/<service>/<method name with its first letter
   lower-cased>`, so `Get` of the service `pet` is `/api/pet/get`. A service name
   may contain slashes (`store/order`). The prefix is `/api` unless `api.prefix`
-  says otherwise. `@path` replaces the method name (see below), and a name that
-  starts with the service name loses that, as a plain prefix: `OrderList` of the
-  service `order` is `/api/order/list`, and so is `Scalars` of a service called
-  `s`, `/api/s/calars`; choose service names that no method starts with by
-  accident.
+  says otherwise. `@path` replaces the method name (see below), and a `@path`
+  that starts with the service name loses that, as a plain prefix: `@path:
+  /orderList` of the service `order` is `/api/order/list`, and so is `@path:
+  /order/list`; the method name itself is never stripped (`OrderList` is
+  `/api/order/orderList`).
 - The default HTTP method is `POST`; `@method` changes it, and several methods
   (`@method: GET, POST`) give an operation each, whose ids have the method in lower
   case added (`pet/get_get`, `pet/get_post`). OpenAPI does not allow a body on `GET` and `DELETE`, but docgen
@@ -121,8 +121,10 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
   request type is listed in `request.query`, which makes it query parameters (see
   the configuration).
 - The tags of an operation are the service name, the ones of `@tags` and the ones
-  of `@permission`, each with its first letter in upper case and the rest in lower
-  case (`OAuth` is `Oauth`), without repeats, sorted.
+  of `@permission`, without repeats, sorted. The first letter of every word of the
+  service name is made upper case and the rest is left as it is (`myService/Sub`
+  is `MyService/Sub`); the tags of `@tags` and `@permission` are made lower case
+  except for the first letter of each word (`OAuth` is `Oauth`, `x-y` is `X-Y`).
 - The summary is the first line of the doc comment; the description is `@desc`.
 
 The package [`route`](route) is the executable specification of the route rule.
@@ -354,8 +356,11 @@ schemas:
 
 An `after_models` overlay is applied before the operations are generated, which
 is what lets an operation refer to a schema that only the overlay has; an
-`after_apis` overlay is applied after. An overlay understands the part of JSON
-Schema that OpenAPI 3.0 documents use, and rejects the rest.
+`after_apis` overlay is applied after. A schema of an overlay has `$ref`, `title`,
+`description`, `type`, `format`, `required`, `properties`, `items`,
+`additionalProperties` and `oneOf`; any other key (`enum`, `example`, `nullable`,
+`allOf` and the constraints) is rejected with the keys that are understood. To
+give a type such values, describe it in Go, or in `type_map`.
 
 ## Command line
 
@@ -457,7 +462,7 @@ dependencies. The rest is internal.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). In short: `go test ./...` must pass and
-`go run ./cmd/docgen -C examples/petstore -check` must be quiet.
+`go run ./cmd/docgen -C examples/petstore -check` must succeed.
 
 ## License
 

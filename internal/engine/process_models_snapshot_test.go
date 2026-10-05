@@ -556,12 +556,15 @@ func TestMistypedAnnotationsAndDirectivesAreReported(t *testing.T) {
 	values := map[string]string{}  // value of a directive -> the type that lists it
 	fields := map[string]string{}  // field whose apidoc tag nobody reads -> what it was probably meant to be
 	var extra []string             // methods that take parameters nobody reads
+	var headers []string           // header types that headers.types does not have
 	for _, rec := range logs.records {
 		if rec.Level != slog.LevelWarn {
 			continue
 		}
 		attrs := attrsOf(rec)
 		switch {
+		case attrs["headerType"] != "":
+			headers = append(headers, attrs["headerType"])
 		case attrs["parameters"] != "":
 			extra = append(extra, attrs["method"])
 		case attrs["field"] != "":
@@ -577,6 +580,7 @@ func TestMistypedAnnotationsAndDirectivesAreReported(t *testing.T) {
 	assert.Equal(t, map[string]string{"Typo": "internal", "Prose": ""}, fields,
 		"a typo is one edit from a scope; a token that a document lists, a scope and - are not reported")
 	assert.Equal(t, []string{"Two"}, extra, "the second parameter of Two is not in the document")
+	assert.Equal(t, []string{"Nobody"}, headers, "a header type that is not in headers.types is not the one the operation gets")
 	assert.Equal(t, map[string]string{"fast": "Speed"}, values,
 		"fast is what the constant is on the wire, and SpeedSlow is its name")
 	assert.Equal(t, map[string]string{"@respone": "@response", "@Tags": "@tags"}, guesses,

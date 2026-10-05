@@ -2,6 +2,7 @@ package engine
 
 import (
 	"encoding/json"
+	"log/slog"
 	"sort"
 	"testing"
 
@@ -110,4 +111,42 @@ func TestFieldShapesOfLegacyDocuments(t *testing.T) {
 	assert.JSONEq(t, `{"type":"object","additionalProperties":true}`, string(encoded), "a map has lost the type of its values")
 	assert.True(t, collections["data"].Value.Type.Is("array"), "a slice of bytes is an array of strings")
 	assert.True(t, collections["one"].Value.Type.Is("string"), "a byte is a string")
+}
+
+// The example and the default of a field are read as what its type says they are,
+// and a value its type does not allow is left out with a warning that names the
+// field, instead of making the whole document invalid.
+func TestTagValuesAreReadByTheTypeOfTheField(t *testing.T) {
+	logs := captureLogs(t)
+	withSettings(t, Settings{}, "github.com/Danceiny/docgen")
+	pkg := loadFixture(t, "testdata/tagvalues")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "tags", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+
+	props := doc.Components.Schemas["github.com.Danceiny.docgen.internal.engine.testdata.tagvalues.Thing"].Value.Properties
+	assert.EqualValues(t, int64(3600000000000), props["timeout"].Value.Example, "a pointer to a duration is read as a duration")
+	assert.EqualValues(t, int64(30000000000), props["timeout"].Value.Default)
+	assert.EqualValues(t, int64(600000000000), props["plain"].Value.Example)
+	assert.Equal(t, "123", props["pointer"].Value.Example, "a string is a string, though it looks like a number")
+	assert.Equal(t, "456", props["custom"].Value.Example)
+	assert.EqualValues(t, int64(3), props["level"].Value.Example)
+	assert.EqualValues(t, int64(1234567890123456789), props["big"].Value.Example)
+	assert.Equal(t, true, props["ok"].Value.Default)
+	assert.Equal(t, 0.5, props["ratio"].Value.Example)
+	assert.Equal(t, []any{"a", "b"}, props["names"].Value.Example)
+
+	for _, name := range []string{"badCount", "badFlag"} {
+		assert.Nil(t, props[name].Value.Example, name)
+		assert.Nil(t, props[name].Value.Default, name)
+	}
+	assert.NotEqual(t, "2024-01-02", props["badWhen"].Value.Example, "the example of the type stays when the one of the field is not a date-time")
+	fields := map[string]string{}
+	for _, rec := range logs.records {
+		if rec.Level == slog.LevelWarn {
+			attrs := attrsOf(rec)
+			fields[attrs["field"]] = attrs["value"]
+		}
+	}
+	assert.Equal(t, map[string]string{"badCount": "abc", "badWhen": "2024-01-02", "badFlag": "maybe"}, fields)
 }

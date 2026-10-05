@@ -32,7 +32,7 @@ func BuildPathItem(doc *openapi3.T, service ServiceInterface, method *Method) {
 			http.MethodPatch, http.MethodHead, http.MethodOptions, http.MethodTrace:
 			verbs = append(verbs, verb)
 		default:
-			Logger().Warn("@method names an HTTP method that an operation cannot have, ignoring it",
+			warnAt("@method names an HTTP method that an operation cannot have, ignoring it",
 				"method", method.Name, "httpMethod", httpMethod, "at", method.Pos)
 		}
 	}
@@ -56,7 +56,7 @@ func BuildPathItem(doc *openapi3.T, service ServiceInterface, method *Method) {
 			op = &cp
 		}
 		if replaced := pathItem.GetOperation(verb); replaced != nil {
-			Logger().Warn("two methods answer the same route with the same HTTP method; the later one is documented",
+			warnAt("two methods answer the same route with the same HTTP method; the later one is documented",
 				"route", method.APIPath, "httpMethod", verb, "method", method.Name, "replaces", replaced.Summary, "at", method.Pos)
 		}
 		pathItem.SetOperation(verb, op)
@@ -129,7 +129,7 @@ func buildExternalDocs(method *Method, doc *openapi3.T) *openapi3.ExternalDocs {
 	}
 	description, url, found := strings.Cut(m, ":")
 	if !found {
-		Logger().Warn("@doc needs a description and a URL separated by a colon, ignoring it",
+		warnAt("@doc needs a description and a URL separated by a colon, ignoring it",
 			"method", method.Name, "annotation", m, "at", method.Pos)
 		return nil
 	}

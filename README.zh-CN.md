@@ -87,12 +87,14 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
   `Page[Pet]` 这样实例化的泛型类型是 `Page` 的组件。`error` 本身不进文档，用 `@response`（见下）。
 - 路由是 `<前缀>/<服务名>/<方法名首字母小写>`，所以服务 `pet` 的 `Get` 是 `/api/pet/get`。
   服务名可以含斜杠（`store/order`）。前缀默认 `/api`，可用 `api.prefix` 修改。`@path` 替换方法名（见下），
-  以服务名开头的名字会被去掉这个前缀，按纯前缀处理：服务 `order` 的 `OrderList` 是 `/api/order/list`，
-  服务 `s` 的 `Scalars` 同理是 `/api/s/calars`；服务名要起得不让任何方法碰巧以它开头。
+  以服务名开头的 `@path` 会被去掉这个前缀，按纯前缀处理：服务 `order` 的 `@path: /orderList` 是 `/api/order/list`，
+  `@path: /order/list` 也是；方法名本身从不被去掉前缀（`OrderList` 是 `/api/order/orderList`）。
 - 默认 HTTP 方法是 `POST`，用 `@method` 修改；写了多个方法（`@method: GET, POST`）时每个方法一个接口，
   id 上加小写的方法名（`pet/get_get`、`pet/get_post`）。OpenAPI 不允许 `GET` 和 `DELETE` 带请求体，
   但 docgen 仍把这类接口的请求写成请求体，除非该请求类型列在 `request.query` 里，那样就变成 query 参数（见配置）。
-- 接口的 tag 是服务名、`@tags` 里的和 `@permission` 里的，每个都是首字母大写、其余小写（`OAuth` 变成 `Oauth`），去重并排序。
+- 接口的 tag 是服务名、`@tags` 里的和 `@permission` 里的，去重并排序。服务名每个单词的首字母大写、其余保持原样
+  （`myService/Sub` 是 `MyService/Sub`）；`@tags` 和 `@permission` 里的 tag 除每个单词的首字母外都变成小写
+  （`OAuth` 是 `Oauth`，`x-y` 是 `X-Y`）。
 - summary 是注释的第一行，description 来自 `@desc`。
 
 [`route`](route) 包是路由规则的可执行规格。如果你有自己的路由器，用 `route.Resolve` 测一测它。
@@ -290,7 +292,9 @@ schemas:
 ```
 
 `after_models` 的 overlay 在生成接口之前应用，这使接口可以引用只存在于 overlay 里的 schema；
-`after_apis` 的 overlay 在之后应用。overlay 只认 OpenAPI 3.0 文档用到的那部分 JSON Schema，其余一律拒绝。
+`after_apis` 的 overlay 在之后应用。overlay 里的 schema 只有 `$ref`、`title`、`description`、`type`、`format`、`required`、
+`properties`、`items`、`additionalProperties` 和 `oneOf`；其他任何键（`enum`、`example`、`nullable`、`allOf` 和各种约束）
+都会被拒绝，并列出认识的键。要给类型这些值，请在 Go 里描述它，或用 `type_map`。
 
 ## 命令行
 
@@ -365,7 +369,7 @@ docgen 还很年轻。以下限制已知，后续版本会改变，请不要依�
 ## 贡献
 
 见 [CONTRIBUTING.md](CONTRIBUTING.md)。简言之：`go test ./...` 必须通过，
-`go run ./cmd/docgen -C examples/petstore -check` 必须无输出。
+`go run ./cmd/docgen -C examples/petstore -check` 必须成功。
 
 ## 许可证
 

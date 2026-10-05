@@ -40,6 +40,10 @@ func (m *Method) parseParams(params *ast.FieldList) {
 		m.Params = append(m.Params, param)
 	}
 	// add a header parameter for the @header:type tag
+	if _, known := settings.HeaderTypes[m.HeaderType]; m.HeaderType != "" && !known {
+		warnAt("@headerType names a header type that headers.types does not have, so the default one is used",
+			"headerType", m.HeaderType, "method", m.Name, "at", m.Pos)
+	}
 	headerFullKey := headerTypeKey(m.HeaderType)
 	if headerFullKey == "" {
 		return // no header type is configured
@@ -127,12 +131,12 @@ func (m *Method) parseResults(results *ast.FieldList) {
 		if catalogErr, ok := settings.Errors.Find(errName); ok {
 			actualHTTPCode := strconv.Itoa(int(catalogErr.HTTPCode))
 			if statusCode != actualHTTPCode {
-				Logger().Warn("status code in a @response comment differs from the HTTP code of its error, using the error's",
+				warnAt("status code in a @response comment differs from the HTTP code of its error, using the error's",
 					"commentCode", statusCode, "error", errName, "errorCode", actualHTTPCode, "method", m.Name, "at", m.Pos)
 				statusCode = actualHTTPCode
 			}
 		} else if settings.Errors != nil && len(settings.Errors.Entries()) > 0 {
-			Logger().Warn("@response names an error that the error catalog does not have, so the response has no schema",
+			warnAt("@response names an error that the error catalog does not have, so the response has no schema",
 				"error", errName, "method", m.Name, "at", m.Pos)
 		}
 
@@ -388,7 +392,7 @@ func extractServiceName(methods []*Method) string {
 			// the string the method returns
 			name := parseNameMethodBody(m.Source, m.Info)
 			if name == "" {
-				Logger().Warn("the Name method does not return a string literal or a constant, so the struct is not a service",
+				warnAt("the Name method does not return a string literal or a constant, so the struct is not a service",
 					"method", m.Name, "at", m.Pos)
 			}
 			return name

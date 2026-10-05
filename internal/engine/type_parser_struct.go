@@ -3,11 +3,15 @@ package engine
 import (
 	"go/ast"
 	"go/types"
+	"reflect"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"gopkg.in/yaml.v3"
 
 	"github.com/Danceiny/docgen/internal/suggest"
 )
@@ -128,6 +132,10 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 					fieldType := inferReflectTypeFromAST(ft)
 					// the full type name of the field
 					fieldTypeKey := p.generateTypeKey(ft)
+					if !settings.CompatLegacySchemaShapes {
+						p.setExampleAndDefault(field, jsonName, fieldSchema.Value, example, defaultVal, fieldType)
+						return
+					}
 					if example != "" {
 						// is the type mapped to string in BasicTypeSchemas?
 						if basicSchema := getBasicTypeSchema(fieldTypeKey); basicSchema != nil && basicSchema.Type != nil && basicSchema.Type.Is("string") {
@@ -367,4 +375,73 @@ func (p *TypeParser) warnAboutFieldTagNobodyReads(field *ast.Field) {
 		args = append(args, "didYouMean", guess)
 	}
 	Logger().Warn("the apidoc tag of a field has a value that is none of the scopes (-, public, internal, hidden) and that no document lists in legacy_field_tokens, so the field is hidden from every document", args...)
+}
+
+// setExampleAndDefault gives a field the example and the default of its tags,
+// read as what the schema of the field says it is: a number for an integer, the
+// text as it is for a string, a list or an object as JSON or YAML. A value that is
+// not one the schema allows is left out, with a warning that names the field and
+// the tag: it would make the whole document invalid, and the error would not say
+// which field it is.
+func (p *TypeParser) setExampleAndDefault(field *ast.Field, name string, schema *openapi3.Schema, example, defaultValue string, goType reflect.Type) {
+	set := func(tag, raw string, assign func(any)) {
+		if raw == "" {
+			return
+		}
+		value := valueOfTag(schema, raw, goType)
+		if value == nil {
+			return
+		}
+		if err := schema.VisitJSON(value); err != nil {
+			warnAt("the "+tag+" tag of a field is not a value that the type of the field allows, so it is left out",
+				"field", name, "value", raw, "reason", firstLine(err.Error()), "at", p.at(field))
+			return
+		}
+		assign(value)
+	}
+	set("example", example, func(v any) { schema.Example = v })
+	set("default", defaultValue, func(v any) { schema.Default = v })
+}
+
+// valueOfTag reads the text of an example or default tag as a value of the schema.
+func valueOfTag(schema *openapi3.Schema, raw string, goType reflect.Type) any {
+	for goType != nil && goType.Kind() == reflect.Pointer {
+		goType = goType.Elem()
+	}
+	if goType == reflect.TypeOf(time.Duration(0)) {
+		// a duration is written as one, 10m, and is its nanoseconds in JSON
+		if d, err := time.ParseDuration(raw); err == nil {
+			return int64(d)
+		}
+		return raw
+	}
+	switch {
+	case schema.Type.Is(openapi3.TypeString):
+		return raw
+	case schema.Type.Is(openapi3.TypeInteger):
+		if v, err := strconv.ParseInt(raw, 10, 64); err == nil {
+			return v
+		}
+	case schema.Type.Is(openapi3.TypeNumber):
+		if v, err := strconv.ParseFloat(raw, 64); err == nil {
+			return v
+		}
+	case schema.Type.Is(openapi3.TypeBoolean):
+		if v, err := strconv.ParseBool(raw); err == nil {
+			return v
+		}
+	default:
+		// an array, an object, or anything: JSON, which YAML reads
+		var value any
+		if err := yaml.Unmarshal([]byte(raw), &value); err == nil {
+			return value
+		}
+	}
+	return raw
+}
+
+// firstLine is the first line of a message, which is where an error says what is wrong.
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+	return line
 }

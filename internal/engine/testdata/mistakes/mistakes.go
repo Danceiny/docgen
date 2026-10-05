@@ -64,6 +64,11 @@ type Service struct{}
 // Name is the name of the service.
 func (Service) Name() string { return "shop" }
 
+// Header names a header type that the configuration does not have.
+//
+// @headerType: Nobody
+func (Service) Header(ctx context.Context, req *Req) (*Req, error) { return nil, nil }
+
 // Two takes two requests, and the second has no place in the document.
 // @path: /two
 func (Service) Two(ctx context.Context, a *Req, b *Req) (*Req, error) { return nil, nil }

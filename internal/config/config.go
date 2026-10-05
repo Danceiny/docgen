@@ -505,6 +505,9 @@ func (d Doc) validate(i int, seen map[string]bool) []error {
 			problems = append(problems, at(fmt.Sprintf("hide_type_prefixes[%d]", j), "must not be empty"))
 		}
 	}
+	if len(d.ForceKeep) > 0 && d.Audience != AudiencePublic {
+		problems = append(problems, at("force_keep", "only a document of the public audience drops the schemas nothing uses, so there is nothing to keep in this one"))
+	}
 	if d.Public != nil {
 		if d.Audience != AudiencePublic {
 			problems = append(problems, at("public", "only a document of the public audience has a public section"))

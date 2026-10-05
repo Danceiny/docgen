@@ -677,3 +677,20 @@ func TestOutsideModule(t *testing.T) {
 		}
 	}
 }
+
+func TestForceKeepIsForPublicDocumentsOnly(t *testing.T) {
+	_, err := Parse([]byte(`
+version: 1
+docs:
+  - name: internal
+    audience: internal
+    output: docs/api/api.yaml
+    info: {title: T}
+    models: ["*"]
+    services: ["*"]
+    force_keep: [example.Hook]
+`))
+	if err == nil || !strings.Contains(err.Error(), "docs[0].force_keep") || !strings.Contains(err.Error(), "public audience") {
+		t.Fatalf("force_keep on an internal document: %v", err)
+	}
+}

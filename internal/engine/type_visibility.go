@@ -119,7 +119,7 @@ func (p *TypeParser) warnAboutDirectiveMistakes(spec *ast.TypeSpec, decl *ast.Ge
 	for _, doc := range typeDocs(spec, decl) {
 		for _, c := range doc.List {
 			if spacedDirective.MatchString(c.Text) {
-				Logger().Warn("write the directive with no space after the slashes, //apidoc:...; as written it is an ordinary comment and is ignored",
+				warnAt("write the directive with no space after the slashes, //apidoc:...; as written it is an ordinary comment and is ignored",
 					"type", spec.Name.Name, "at", p.at(spec))
 			}
 		}
@@ -128,7 +128,7 @@ func (p *TypeParser) warnAboutDirectiveMistakes(spec *ast.TypeSpec, decl *ast.Ge
 		switch v.Scope {
 		case "public", "internal", "hidden", "custom":
 		default:
-			Logger().Warn("the //apidoc: directive of a type has a scope that is not public, internal or hidden, so the type is shown as if it had none",
+			warnAt("the //apidoc: directive of a type has a scope that is not public, internal or hidden, so the type is shown as if it had none",
 				"scope", v.Scope, "type", spec.Name.Name, "at", p.at(spec))
 		}
 	}

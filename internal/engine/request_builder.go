@@ -75,7 +75,7 @@ func warnAboutParametersNobodyReads(method *Method) {
 		}
 	}
 	if bodies > 1 && firstTime("parameters", method.Pos) {
-		Logger().Warn("the method takes more than one parameter after the context; the request is the first one and the others are not in the document",
+		warnAt("the method takes more than one parameter after the context; the request is the first one and the others are not in the document",
 			"method", method.Name, "parameters", bodies, "at", method.Pos)
 	}
 }

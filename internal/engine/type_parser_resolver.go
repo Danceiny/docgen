@@ -15,7 +15,7 @@ import (
 func (p *TypeParser) parseSelector(sel *ast.SelectorExpr, ctx *ParseContext) *openapi3.SchemaRef {
 	pkgAlias, ok := sel.X.(*ast.Ident)
 	if !ok {
-		Logger().Warn("selector expression has an unsupported qualifier", "selector", sel.Sel.Name, "at", p.at(sel))
+		warnAt("selector expression has an unsupported qualifier", "selector", sel.Sel.Name, "at", p.at(sel))
 		return defaultSchemaRef() // an expression that cannot be parsed
 	}
 
@@ -79,7 +79,7 @@ func (p *TypeParser) Select(alias, tn string, ctx *ParseContext) *openapi3.Schem
 		if strings.HasPrefix(fk, "sync") {
 			return nil
 		}
-		Logger().Warn("external package could not be loaded",
+		warnAt("external package could not be loaded",
 			"importPath", importPath, "type", tn, "alias", alias, "key", fk, "at", p.atField(ctx))
 	}
 
@@ -87,7 +87,7 @@ func (p *TypeParser) Select(alias, tn string, ctx *ParseContext) *openapi3.Schem
 		// A type of another module that has no declaration to read, such as
 		// unsafe.Pointer. No component will ever describe it, so a reference to
 		// it would point at nothing.
-		Logger().Warn("Go type has no schema and is left out", "type", fk, "at", p.atField(ctx))
+		warnAt("Go type has no schema and is left out", "type", fk, "at", p.atField(ctx))
 		return nil
 	}
 	ref := NewSchemaRefFromFullKey(fk)
@@ -195,7 +195,7 @@ func (p *TypeParser) parseIdent(ident *ast.Ident, ctx *ParseContext) *openapi3.S
 	}
 	if p.isPredeclaredType(ident) {
 		// complex64 and complex128: JSON has no number with two parts.
-		Logger().Warn("Go type has no schema and is left out", "type", ident.Name, "at", p.at(ident))
+		warnAt("Go type has no schema and is left out", "type", ident.Name, "at", p.at(ident))
 		return nil
 	}
 

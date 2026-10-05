@@ -140,3 +140,37 @@ func TestCommandSaysWhatWentWrong(t *testing.T) {
 		t.Errorf("-version: exit %d, stdout %q", got.code, got.stdout)
 	}
 }
+
+// The command takes flags only: a directory given as an argument would be taken for
+// nothing, and the run would document the current directory.
+func TestTheCommandRefusesArguments(t *testing.T) {
+	got := docgenCLI(t, "./docs")
+	if got.code != 2 || !strings.Contains(got.stderr, `unexpected argument "./docs"`) || !strings.Contains(got.stderr, "-C") {
+		t.Fatalf("exit %d: %s", got.code, got.stderr)
+	}
+}
+
+// An output that is the configuration file would replace the configuration with a
+// document on the first run.
+func TestTheCommandRefusesToOverwriteItsConfiguration(t *testing.T) {
+	dir := copyExample(t)
+	config, err := os.ReadFile(filepath.Join(dir, "docgen.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bad := strings.Replace(string(config), "output: docs/api/internal.yaml", "output: docgen.yaml", 1)
+	if bad == string(config) {
+		t.Fatal("the edit changed nothing")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docgen.yaml"), []byte(bad), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := docgenCLI(t, "-C", dir)
+	if got.code != 1 || !strings.Contains(got.stderr, "the configuration file itself") {
+		t.Fatalf("exit %d: %s", got.code, got.stderr)
+	}
+	after, _ := os.ReadFile(filepath.Join(dir, "docgen.yaml"))
+	if string(after) != bad {
+		t.Error("the configuration was overwritten")
+	}
+}

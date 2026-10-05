@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"runtime/pprof"
@@ -46,6 +47,10 @@ func main() {
 	if *version {
 		fmt.Println(versionString())
 		return
+	}
+	if flag.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "docgen: unexpected argument %q: docgen takes flags only; name the module to document with -C and the configuration with -config\n", flag.Arg(0))
+		os.Exit(2)
 	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "docgen:", err)
@@ -112,6 +117,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	if err := refuseToOverwrite(dir, *configPath, cfg); err != nil {
+		return err
+	}
 
 	logger := newLogger(os.Stderr, *verbose)
 	opts := pipeline.Options{Dir: dir, Config: cfg, Docs: docNames, Logger: logger}
@@ -156,4 +164,21 @@ func checkDocuments(opts pipeline.Options, logger *slog.Logger) error {
 		fmt.Fprintf(os.Stderr, "%s (%s): %s\n", d.Output, d.Document, d.Reason)
 	}
 	return errors.New("documents are out of date; run docgen to write them")
+}
+
+// refuseToOverwrite fails when the output of a document is the configuration file,
+// which the first run would replace with a document.
+func refuseToOverwrite(dir, configPath string, cfg *config.Config) error {
+	abs := func(p string) string {
+		if !filepath.IsAbs(p) {
+			p = filepath.Join(dir, p)
+		}
+		return filepath.Clean(p)
+	}
+	for i, d := range cfg.Docs {
+		if abs(d.Output) == abs(configPath) {
+			return fmt.Errorf("docs[%d].output is %s, the configuration file itself, which the document would replace", i, d.Output)
+		}
+	}
+	return nil
 }

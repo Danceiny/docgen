@@ -42,7 +42,7 @@ func (m *Method) warnUnmatchedParamAnnotations(fields []*ast.Field) {
 	}
 	for _, name := range paramAnnotationNames(m.Doc) {
 		if !known[name] {
-			Logger().Warn("@param names a parameter that the method does not have, ignoring it; name a Go parameter, or param1, param2 and so on by position",
+			warnAt("@param names a parameter that the method does not have, ignoring it; name a Go parameter, or param1, param2 and so on by position",
 				"method", m.Name, "param", name, "at", m.Pos)
 		}
 	}
@@ -80,7 +80,7 @@ func (m *Method) warnAboutMistypedAnnotations() {
 			guess = suggest.ClosestWithin(strings.ToLower(name), knownAnnotations, 1)
 		}
 		if guess != "" {
-			Logger().Warn("annotation is not one docgen reads; it is ignored", "annotation", "@"+name, "didYouMean", "@"+guess, "method", m.Name, "at", m.Pos)
+			warnAt("annotation is not one docgen reads; it is ignored", "annotation", "@"+name, "didYouMean", "@"+guess, "method", m.Name, "at", m.Pos)
 		}
 	}
 }

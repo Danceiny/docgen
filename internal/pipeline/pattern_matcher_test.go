@@ -84,7 +84,7 @@ func TestTheTwinOfAPatternIsNotReportedWhenBothAreListed(t *testing.T) {
 	pkgs := []*packages.Package{{ID: "example.com/shop/service"}, {ID: "example.com/shop/model"}}
 	warnAboutPatternsThatMatchNothing(config.Doc{
 		Name:     "internal",
-		Models:   []string{"*/model", "model"},
+		Models:   []string{"*/model", "model", "domain", "*/domain"},
 		Services: []string{"*/service", "orders", "*/cron"},
 	}, pkgs)
 
@@ -98,6 +98,6 @@ func TestTheTwinOfAPatternIsNotReportedWhenBothAreListed(t *testing.T) {
 		})
 	}
 	if want := []string{"*/service", "orders", "*/cron"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("reported patterns = %v, want %v: */model has model beside it, and nothing else is named in both layouts", got, want)
+		t.Errorf("reported patterns = %v, want %v: */model and */domain have their twins beside them, and nothing else is named in both layouts", got, want)
 	}
 }

@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -367,5 +368,34 @@ func TestCheckDoesNotTakeLineEndingsForDrift(t *testing.T) {
 	drifts, err := Check(Options{Dir: dir, Config: cfg})
 	if err != nil || len(drifts) != 0 {
 		t.Fatalf("documents with CRLF line endings: %+v, %v", drifts, err)
+	}
+}
+
+// Where a document differs is told in the lines of the file as they are checked, not
+// as the carriage returns and line feeds of a Windows checkout have made them longer.
+func TestCheckSaysWhereAWindowsCheckoutDiffers(t *testing.T) {
+	dir := t.TempDir()
+	copyTree(t, petstoreDir, dir)
+	cfg := petstoreConfig(t, dir)
+	path := filepath.Join(dir, cfg.Docs[0].Output)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := strings.Replace(string(data), "Petstore internal API", "Petstore staff API", 1)
+	if stale == string(data) {
+		t.Fatal("the fixture edit changed nothing")
+	}
+	if err := os.WriteFile(path, []byte(strings.ReplaceAll(stale, "\n", "\r\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	drifts, err := Check(Options{Dir: dir, Config: cfg, Docs: []string{cfg.Docs[0].Name}})
+	if err != nil || len(drifts) != 1 {
+		t.Fatalf("%+v, %v", drifts, err)
+	}
+	line := 1 + strings.Count(stale[:strings.Index(stale, "Petstore staff API")], "\n")
+	if want := fmt.Sprintf("first at line %d", line); !strings.Contains(drifts[0].Reason, want) {
+		t.Errorf("reason = %q, want it to contain %q", drifts[0].Reason, want)
 	}
 }
