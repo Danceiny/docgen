@@ -129,6 +129,7 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
   `json:"x,nullable"` 表示可为 null。
 - `example:"..."` 和 `default:"..."` tag（或 `json:"x,default=..."`）给出字段的示例和默认值，按字段的类型读取：
   整数是数字，字符串是原文，列表或对象是 JSON，`time.Duration` 写成 `10m`。类型不允许的值会被略去，并有指明字段的警告。
+  之后若有 overlay 替换了字段的类型，这个值可能变得不再被类型允许：那会让这次运行失败，错误里会指明是哪个 schema。
 - **类型**的注释是其组件的描述（枚举的注释在前，随后是值的列表）。**字段**的注释（在字段上方或行尾）是该字段的描述。
   类型是组件的字段，在自己有话要说（描述、`nullable`、`example` 或 `default`）时，通过 `allOf` 的唯一成员引用它，
   因为 OpenAPI 3.0 在 `$ref` 旁边没有这些的位置；没有话要说的字段就是 `$ref` 本身。列表或 map 的注释属于列表或 map，不属于它里面的元素。
@@ -139,11 +140,11 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
 - map 是 `object`，其 `additionalProperties` 是值的 schema（任意值的 map 是 `true`），`any` 和 `interface{}` 是空 schema，
   字节切片是 base64 `string`，byte 是数字。
 - 直接或经由其他类型包含自身的类型，表现为指向自身的 `$ref`。
-- 泛型类型按声明文档化。类型参数类型的字段没有 schema，除非它的注释列出它可能的类型（`@generic: Product, Order`），
-  这时它是这些组件的 `oneOf`；实例化的 `Page[Product]` 只保留其类型参数点名的分支，`generic_titles` 列出其 `oneOf`
-  保持完整的标题。只有一个这种字段的 struct 以第一个候选类型作标题。带方法的接口可以是任意 JSON 值，
-  除非它的注释写了 `@autowire: true`，这时它是同包中实现它的类型的 `oneOf`。
+- 泛型类型按声明文档化，它的实例 `Page[Product]` 是对它的引用，不管类型实参是什么。类型参数类型的字段没有 schema，
+  除非它的注释列出它可能的类型（`@generic: Product, Order`），这时它是所有这些组件的 `oneOf`，对每个实例都一样。
+  带方法的接口可以是任意 JSON 值，除非它的注释写了 `@autowire: true`，这时它是同包中实现它的类型的 `oneOf`。
 - `time.Time` 是 `date-time` 字符串，`time.Duration` 是 `int64` 纳秒数，与 JSON 的写法一致。要改用 `type_map`。
+  `type_map` 对一个类型的说法，就是这个类型在用到它的地方的样子，不管它的声明在前还是在后；它点名的本模块类型照样是一个组件。
 
 ### 谁能看到什么
 
@@ -238,7 +239,8 @@ errors:                         # @response 引用的错误目录
   file: errors.json
   component_prefix: example.com.shop.errors.
 
-generic_titles: []              # 其 oneOf 保持完整、不按持有它的标题里的类型参数收窄的 schema 的标题
+generic_titles: []              # 仅用于保留 compat.legacy_output 的文档：其 oneOf 保持完整、
+                                #   不按持有它的标题里的类型参数收窄的 schema 的标题
 
 docs:
   - name: internal              # 用 -doc 选择文档
@@ -362,6 +364,9 @@ compat:
     内嵌 struct 与外层同名的字段在内嵌写在后面时取内嵌的，内嵌的列表或 map 被略去，
     因名字而隐藏的枚举和隐藏类型的 map 的 map 不会被隐藏；
   - 声明在分组 `type ( ... )` 里的类型的指令不会过滤枚举的值；
+  - 泛型类型的实例是它的副本，标题里带着类型实参，会把它字段的 `oneOf` 收窄到这些实参；只有一个类型参数字段的 struct
+    以第一个候选类型作标题，对每个实例都把该字段收窄到那一个（`generic_titles` 让一个 `oneOf` 保持完整）；`type_map`
+    点名的类型，声明在前时是对它的组件的引用，声明在后时是该 schema 的副本；
   - 没有分号的 `@generic` 会把候选类型留在描述里，逗号后面带空格的候选类型会丢失（`@generic: Product, Order`
     只有候选类型 `Product`）；
   - `@autowire` 联合类型的分支旁边保留标记 `pattern: default`，描述里有 `@autowire: true` 这一行；当它的声明与分支被加入之间
@@ -383,6 +388,8 @@ docgen 还很年轻。以下限制已知，后续版本会改变，请不要依�
   所以写出来的形式与 Go 形状不同的类型（`net.IP`、`big.Int`、字节数组的 UUID）需要 `type_map` 条目。
 - 标记 `pattern: default` 出现在 docgen 无法填充的 schema 上，比如没有任何实现的 `@autowire` 接口；每一处都有警告。
 - `json:",string"` 被忽略，指针除非写了 `json:"x,nullable"` 否则不可为 null。
+- 两个内嵌 struct 在同一层有同名的 JSON 字段，是 encoding/json 以两个都不写来回答的歧义；docgen 只描述其中一个，
+  是哪一个可能取决于声明的先后顺序。
 - 枚举的常量必须声明在该类型所在的包里。
 - **泛型按声明文档化**，如上所述：只支持一个类型参数，没有 `@generic` 的类型参数字段没有 schema，
   类型参数的列表（`Items []T`）是任意类型的列表，不管实例的类型实参是什么。

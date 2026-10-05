@@ -115,3 +115,31 @@ func TestPositionOfANilNodeOfAConcreteTypeIsNowhere(t *testing.T) {
 	assert.Equal(t, "", positionOf(nil, &ast.Field{}))
 	assert.NotEmpty(t, positionOf(pkg, pkg.Syntax[0]))
 }
+
+// What the configuration says a type of the module is, is what it is wherever the
+// type is used: the field of a struct that is declared before the type and that of a
+// struct that is declared after it are the same, not a copy for the one and a
+// reference to the component for the other.
+func TestAConfiguredTypeIsWrittenWhereItIsUsedWhateverTheOrderOfDeclarations(t *testing.T) {
+	const prefix = "github.com.Danceiny.docgen.internal.engine.testdata.mapped."
+	money := &openapi3.Schema{Type: &openapi3.Types{"string"}, Description: "an amount", Example: "12.50"}
+	withSettings(t, Settings{TypeMap: map[string]*openapi3.Schema{prefix + "Money": money}}, "github.com/Danceiny/docgen")
+	pkg := loadFixture(t, "testdata/mapped")
+	doc := checkerDoc(openapi3.Schemas{})
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+
+	for _, name := range []string{"Before", "After"} {
+		props := doc.Components.Schemas[prefix+name].Value.Properties
+		for _, field := range []string{"price", "plain"} {
+			property := props[field]
+			require.NotNil(t, property, "%s.%s", name, field)
+			assert.Empty(t, property.Ref, "%s.%s is the schema of the configuration, not a reference", name, field)
+			assert.True(t, property.Value.Type.Is("string"), "%s.%s", name, field)
+			assert.Equal(t, "12.50", property.Value.Example, "%s.%s", name, field)
+		}
+		assert.Equal(t, "Price is the price.", props["price"].Value.Description, "the comment of the field wins")
+		assert.Equal(t, "an amount", props["plain"].Value.Description, "and without one the description of the configuration stays")
+	}
+	assert.Contains(t, doc.Components.Schemas, prefix+"Money", "the declaration is a component all the same")
+}

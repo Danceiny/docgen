@@ -34,3 +34,31 @@ type Keyed[K comparable, V any] map[K]V
 
 // IntPage is declared as an instance of a generic type.
 type IntPage Page[int]
+
+// Apple is a candidate.
+type Apple struct {
+	Colour string `json:"colour"`
+}
+
+// Pear is another.
+type Pear struct {
+	Ripe bool `json:"ripe"`
+}
+
+// Wrap has only the generic field, which lists two candidates.
+type Wrap[T any] struct {
+	// @generic: Apple, Pear
+	Data T `json:"data"`
+}
+
+// Basket holds an instance for each candidate.
+type Basket struct {
+	A Wrap[Apple] `json:"a"`
+	B Wrap[Pear]  `json:"b"`
+}
+
+// Tagged has a type parameter with a constraint, and candidates for its field.
+type Tagged[T Num] struct {
+	// @generic: Apple, Pear
+	V T `json:"v"`
+}

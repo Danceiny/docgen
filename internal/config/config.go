@@ -39,7 +39,9 @@ type Config struct {
 	// GenericTitles are the titles of the schemas whose oneOf alternatives are kept
 	// whole, not narrowed by the type arguments in the title that holds them: the
 	// full key of a type, or the full key with the type arguments of an instance
-	// in brackets, as a schema is titled.
+	// in brackets, as a schema is titled. Only the documents of a configuration that
+	// keeps compat.legacy_output have titles that carry type arguments, so only they
+	// read this.
 	GenericTitles []string `yaml:"generic_titles"`
 	// TypeMap fixes the schema of types, keyed by full key (the dotted import path
 	// followed by the type name), instead of describing them from their source.

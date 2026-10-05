@@ -642,6 +642,14 @@ func TestAReferenceToAHiddenTypeIsExplainedByItsBeingHidden(t *testing.T) {
 	assert.Contains(t, err.Error(), "example.com.hiding.domain.InternalBefore")
 	assert.Contains(t, err.Error(), "the document hides that type")
 	assert.NotContains(t, err.Error(), `pattern of "models"`)
+
+	// A configuration that keeps legacy_output has always been told what it is told.
+	legacy, err := config.Load("testdata/hiding/docgen-overlay-legacy.yaml")
+	require.NoError(t, err)
+	err = Run(Options{Dir: "testdata/hiding", Config: legacy, OutputDir: t.TempDir()})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `pattern of "models"`)
+	assert.NotContains(t, err.Error(), "the document hides that type")
 }
 
 // The order of the fields that a schema lists is the order of the fields it has: a
@@ -681,6 +689,7 @@ func TestAnExampleThatAnOverlayMadeInvalidFailsTheRun(t *testing.T) {
 	assert.Contains(t, err.Error(), "example.com.examples.m.Owner")
 	assert.Contains(t, err.Error(), "home")
 	assert.Contains(t, err.Error(), "example")
+	assert.Contains(t, err.Error(), "change the tag or the overlay", "and says what to look at")
 }
 
 // The module is loaded and type-checked once for all the documents of a run, not

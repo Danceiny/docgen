@@ -1,0 +1,14 @@
+version: 1
+compat:
+  legacy_output: true
+docs:
+  - name: public
+    audience: public
+    output: out/public.yaml
+    info: {title: Hiding, version: 0.0.1}
+    models: ["domain"]
+    services: ["service"]
+    hide_type_prefixes: [Internal]
+    public: {tag: public}
+    overlay:
+      - {file: overlay-hidden.yaml, stage: after_apis}

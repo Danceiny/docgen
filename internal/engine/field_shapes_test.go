@@ -404,6 +404,12 @@ func TestAUnionHasItsAlternativesWhateverTheOrderOfItsUses(t *testing.T) {
 			"the line that makes it a union is not part of what it says")
 	}
 
+	// The values of a map are the union, not any value, whichever is declared first.
+	holder := doc.Components.Schemas[prefix+"Holder"].Value.Properties
+	assert.Equal(t, "#/components/schemas/"+prefix+"Early", holder["byName"].Value.AdditionalProperties.Schema.Ref)
+	assert.Equal(t, "#/components/schemas/"+prefix+"Late", holder["byNamePtr"].Value.AdditionalProperties.Schema.Ref)
+	assert.Equal(t, "#/components/schemas/"+prefix+"Early", holder["nested"].Value.AdditionalProperties.Schema.Value.AdditionalProperties.Schema.Ref)
+
 	lonely := doc.Components.Schemas[prefix+"Lonely"]
 	require.NotNil(t, lonely)
 	assert.True(t, IsPlaceholder(lonely.Value), "a union that nothing implements is the placeholder it always was")

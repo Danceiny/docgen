@@ -56,7 +56,12 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 				tagdocGenerics = []string{suffixKey}
 			}
 		}
-		if fieldCnt == 1 && len(tagdocGenerics) > 0 {
+		if settings.CompatLegacyOutput && fieldCnt == 1 && len(tagdocGenerics) > 0 {
+			// A struct that has only such a field is titled with the first candidate,
+			// which is what narrows the alternatives of the field to it where the
+			// struct is written out. (Documents that keep the old way of writing have
+			// it; elsewhere an instance of a generic type is the generic type, and what
+			// the type says of its field is true of every instance.)
 			p.defers.PushFront(func() {
 				gtk := tagdocGenerics[0]
 				if ref := p.searchSchemaFromDoc(gtk); ref != nil {
@@ -190,7 +195,7 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 			})
 		}
 
-		if len(tagdocGenerics) > 0 {
+		if settings.CompatLegacyOutput && len(tagdocGenerics) > 0 {
 			if fieldSchema.Value.Title != "" {
 				fieldSchema.Value.Title = fieldSchema.Value.Title + "[" + strings.Join(tagdocGenerics, ",") + "]"
 			}
@@ -212,7 +217,7 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 					}
 				}
 				titles = dedupe(titles)
-				if fieldSchema.Value.Title != "" {
+				if settings.CompatLegacyOutput && fieldSchema.Value.Title != "" {
 					fieldSchema.Value.Title = fieldSchema.Value.Title + "[" + strings.Join(titles, ",") + "]"
 				}
 			})
@@ -547,19 +552,25 @@ func firstLine(s string) string {
 	return line
 }
 
+// asReference gives a type that was parsed already, which is not a reference yet
+// but a copy of its component that says which one it is by its title, the
+// reference to the component. What it says may not be complete yet (the
+// alternatives of a union are added last), and it is the component all the same.
+func (p *TypeParser) asReference(ref *openapi3.SchemaRef) *openapi3.SchemaRef {
+	if ref.Ref != "" || ref.Value == nil || ref.Value.Title == "" || p.doc == nil || p.doc.Components == nil || p.doc.Components.Schemas[ref.Value.Title] == nil {
+		return ref
+	}
+	return &openapi3.SchemaRef{Ref: NewRefFromFullKey(ref.Value.Title), Value: ref.Value}
+}
+
 // describeReference gives a field whose type is a component what the field says
 // about itself. OpenAPI 3.0 has no place for it next to a $ref, so the reference
 // is the only member of an allOf, which can have a description, a nullable flag,
 // an example and a default of its own. A field that says nothing keeps the plain
 // reference.
 func (p *TypeParser) describeReference(field *ast.Field, ref *openapi3.SchemaRef, example, defaultValue string) *openapi3.SchemaRef {
-	if ref.Ref == "" {
-		// A type that was parsed already is not a reference yet but a copy of its
-		// component, which says which one it is by its title.
-		if ref.Value == nil || ref.Value.Title == "" || p.doc == nil || p.doc.Components == nil || p.doc.Components.Schemas[ref.Value.Title] == nil {
-			return ref
-		}
-		ref = &openapi3.SchemaRef{Ref: NewRefFromFullKey(ref.Value.Title), Value: ref.Value}
+	if ref = p.asReference(ref); ref.Ref == "" {
+		return ref
 	}
 	description := extractDescription(field.Doc, field.Comment)
 	nullable := isNullableFromField(field)

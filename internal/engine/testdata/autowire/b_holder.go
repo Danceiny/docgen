@@ -8,4 +8,9 @@ type Holder struct {
 	Third  Late   `json:"third"`
 	Fourth Late   `json:"fourth"`
 	Fifth  Lonely `json:"fifth"`
+
+	// Maps of unions, one declared before and one after.
+	ByName    map[string]Early             `json:"byName"`
+	ByNamePtr map[string]*Late             `json:"byNamePtr"`
+	Nested    map[string]map[string]*Early `json:"nested"`
 }

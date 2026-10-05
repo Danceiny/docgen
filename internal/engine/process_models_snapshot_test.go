@@ -633,20 +633,36 @@ func TestProcessModels_GenericDeclarationsHaveNoComponentsBesidesTheirOwn(t *tes
 		keys = append(keys, strings.TrimPrefix(key, prefix))
 	}
 	sort.Strings(keys)
-	assert.Equal(t, []string{"Boxed", "IntPage", "Keyed", "Num", "Page", "Pair"}, keys,
+	assert.Equal(t, []string{"Apple", "Basket", "Boxed", "EarlyAlias", "EarlyDefined", "IntPage", "Keyed", "Num", "Page", "Pair", "Pear", "Tagged", "Wrap"}, keys,
 		"no Keyedcomparable beside Keyed, no NumNum beside Num, no IntPageint")
+	for _, name := range []string{"IntPage", "EarlyAlias", "EarlyDefined"} {
+		declared := doc.Components.Schemas[prefix+name]
+		assert.False(t, IsPlaceholder(declared.Value), "%s is declared as an instance, whether it is declared before the generic type or after it", name)
+		assert.NotEmpty(t, declared.Ref+declared.Value.Title, name)
+	}
 	assert.Equal(t, prefix+"Keyed", doc.Components.Schemas[prefix+"Keyed"].Value.Title)
+	assert.Equal(t, prefix+"Wrap", doc.Components.Schemas[prefix+"Wrap"].Value.Title, "an instance is the generic type, with no type argument in its title")
+	var candidates []string
+	for _, alternative := range doc.Components.Schemas[prefix+"Wrap"].Value.Properties["data"].Value.OneOf {
+		candidates = append(candidates, strings.TrimPrefix(alternative.Ref, "#/components/schemas/"+prefix))
+	}
+	assert.Equal(t, []string{"Apple", "Pear"}, candidates, "what the generic type says of its field is true of every instance")
+	basket := doc.Components.Schemas[prefix+"Basket"].Value.Properties
+	assert.Equal(t, "#/components/schemas/"+prefix+"Wrap", basket["a"].Ref)
+	assert.Equal(t, "#/components/schemas/"+prefix+"Wrap", basket["b"].Ref)
+	assert.NotContains(t, basket["a"].Value.Title, "[", "nor does what the field holds of it")
+	assert.NotContains(t, doc.Components.Schemas[prefix+"Tagged"].Value.Properties["v"].Value.Title, "[", "the candidates of a field are its alternatives, not part of a title")
 	assert.True(t, doc.Components.Schemas[prefix+"Page"].Value.Properties["items"].Value.Items.Value.Type == nil, "a list of a type parameter is a list of anything")
 	assert.Equal(t, "#/components/schemas/"+prefix+"Num", doc.Components.Schemas[prefix+"Boxed"].Value.Properties["v"].Ref)
-	intPage := doc.Components.Schemas[prefix+"IntPage"]
-	assert.False(t, IsPlaceholder(intPage.Value), "it is not the placeholder of a type that was not described")
-	assert.NotEmpty(t, intPage.Ref+intPage.Value.Title)
 
 	legacy := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "snapshot", Version: "generics"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
 	withSettings(t, Settings{CompatLegacyOutput: true}, "github.com/Danceiny/docgen")
 	legacyDefers, legacyMerges := processModelsFor(pkg, legacy, testInternal)
 	runProcessModelsTasks(t, legacyDefers, legacyMerges, legacy)
 	assert.Contains(t, legacy.Components.Schemas, prefix+"Keyedcomparable", "documents that keep the old way of writing have it")
+	assert.Equal(t, prefix+"Wrap[Apple]", legacy.Components.Schemas[prefix+"Wrap"].Value.Title, "and a struct that has only the generic field is titled with its first candidate")
+	assert.Contains(t, legacy.Components.Schemas[prefix+"Tagged"].Value.Properties["v"].Value.Title, "[", "and the candidates of a field are in its title")
+	assert.Contains(t, legacy.Components.Schemas[prefix+"Basket"].Value.Properties["a"].Value.Title, "[Apple", "as is the type argument of an instance")
 	assert.True(t, IsPlaceholder(legacy.Components.Schemas[prefix+"Page"].Value.Properties["items"].Value.Items.Value),
 		"and the placeholder as the items of a list of a type parameter")
 }

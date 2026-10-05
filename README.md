@@ -167,7 +167,9 @@ The named types of the `models` packages become **components**
   example and the default of a field, read as what its type is: a number for an
   integer, the text itself for a string, JSON for a list or an object, `10m` for a
   `time.Duration`. A value that its type does not allow is left out, with a warning
-  that names the field.
+  that names the field. An overlay that replaces the type of a field afterwards can
+  make the value one that the type no longer allows: that fails the run, and the
+  error says which schema has it.
 - The comment of a **type** is the description of its component (for an enum it
   comes first, then the list of the values). The comment of a **field**, above it
   or after it, is its description. A field whose type is a component refers to it
@@ -189,16 +191,17 @@ The named types of the `models` packages become **components**
   slice of bytes is a base64 `string` and a byte a number.
 - A type that contains itself, directly or through other types, is a `$ref` to
   itself.
-- A generic type is documented as declared. A field of a type-parameter type has
-  no schema unless its comment lists the types it may be, `@generic: Product,
-  Order`, which makes it a `oneOf` of those components; an instantiated
-  `Page[Product]` keeps the alternatives its type arguments name, and
-  `generic_titles` lists the titles whose `oneOf` is kept whole. A struct with only
-  such a field is titled with the first candidate. An interface with methods holds
-  any JSON value, unless its comment says `@autowire: true`, which makes it a
-  `oneOf` of the types of its package that implement it.
+- A generic type is documented as declared, and an instance of it, `Page[Product]`,
+  is a reference to it, whatever its type arguments are. A field of a
+  type-parameter type has no schema unless its comment lists the types it may be,
+  `@generic: Product, Order`, which makes it a `oneOf` of all of those components,
+  for every instance. An interface with methods holds any JSON value, unless its
+  comment says `@autowire: true`, which makes it a `oneOf` of the types of its
+  package that implement it.
 - `time.Time` is a `date-time` string and `time.Duration` an `int64` number of
-  nanoseconds, as JSON writes them. `type_map` says otherwise.
+  nanoseconds, as JSON writes them. `type_map` says otherwise, and what it says of
+  a type is what the type is where it is used, whatever order its declaration comes
+  in; a type of the module that it names is a component all the same.
 
 ### Who sees what
 
@@ -309,8 +312,9 @@ errors:                         # the error catalog @response refers to
   file: errors.json
   component_prefix: example.com.shop.errors.
 
-generic_titles: []              # titles of schemas whose oneOf is kept whole, not narrowed
-                                #   by the type arguments in the title that holds them
+generic_titles: []              # only for documents that keep compat.legacy_output: titles
+                                #   of schemas whose oneOf is kept whole, not narrowed by
+                                #   the type arguments in the title that holds them
 
 docs:
   - name: internal              # selects the document with -doc
@@ -461,6 +465,12 @@ compat:
     and an enum hidden by its name or a map of maps of a hidden type is not hidden;
   - the directive of a type declared in a group, `type ( ... )`, does not filter the
     values of an enum;
+  - an instance of a generic type is a copy of it with its type arguments in the
+    title, which narrows the `oneOf` of its fields to them, and a struct that has
+    only a type-parameter field is titled with its first candidate, which narrows
+    the field to that one for every instance (`generic_titles` keeps a `oneOf`
+    whole); a type that `type_map` names is a reference to its component when its
+    declaration comes first and a copy of the schema when it does not;
   - `@generic` without a semicolon leaves the candidates in the description, and
     a candidate after a comma and a space is lost (`@generic: Product, Order` is
     the candidate `Product`);
@@ -499,6 +509,10 @@ on them.
   about each one.
 - `json:",string"` is ignored, and a pointer is not nullable unless
   `json:"x,nullable"` says so.
+- Two embedded structs that have a field with the same JSON name, at the same depth,
+  are an ambiguity that encoding/json answers by writing neither. docgen
+  describes one of them, and which one can depend on the order the declarations
+  come in.
 - The constants of an enum must be declared in the package of the type.
 - **Generics are documented as declared**, as said above: only one type parameter
   is supported, a type-parameter field without `@generic` has no schema, and a

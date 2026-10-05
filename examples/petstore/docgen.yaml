@@ -12,6 +12,7 @@ api:
 type_map:
   example.com.petstore.pet.domain.Price:
     type: string
+    description: An amount of money in dollars, written as a string such as "12.50" so that no client rounds it.
     example: "12.50"
 
 # The header type each operation takes as its "Headers" parameter. The two GET

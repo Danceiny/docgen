@@ -50,7 +50,8 @@ func checkExamples(doc *openapi3.T) error {
 					at = strings.TrimPrefix(where, ".")
 				}
 				written, _ := json.Marshal(value.what)
-				return fmt.Errorf("the %s of %s, %s, is not a value that the schema allows: %s", value.kind, at, written, firstLine(err.Error()))
+				return fmt.Errorf("the %s of %s, %s, is not a value that the schema allows: %s (a value that comes from a tag of a field was read before the overlays: if an overlay replaced the type of the field, change the tag or the overlay)",
+					value.kind, at, written, firstLine(err.Error()))
 			}
 		}
 		for _, edge := range schemaChildren(schema) {

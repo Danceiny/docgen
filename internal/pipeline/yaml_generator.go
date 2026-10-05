@@ -301,7 +301,7 @@ func normalizeSchemaRef(doc *openapi3.T, ref *openapi3.SchemaRef, seen map[*open
 	if strings.HasPrefix(ref.Ref, "#/components/schemas/") {
 		key := strings.TrimPrefix(ref.Ref, "#/components/schemas/")
 		if _, ok := doc.Components.Schemas[key]; !ok {
-			if hides != nil && hides(key) {
+			if !legacyOutput && hides != nil && hides(key) {
 				return fmt.Errorf("missing local schema reference %q: the document hides that type, by its //apidoc: directive or by its name, so no schema describes it and nothing in the document can refer to it, an overlay included; show the type in this document, or leave the reference out of the overlay", ref.Ref)
 			}
 			if key == "unknown" || strings.HasPrefix(key, "unknown.") {

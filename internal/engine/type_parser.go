@@ -259,6 +259,12 @@ func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.S
 		return nil
 	}
 
+	if configured := settings.TypeMap[fk]; configured != nil && !settings.CompatLegacyOutput {
+		// What the configuration says a type is, it is wherever the type is used,
+		// and not a reference to its component when the declaration was read first.
+		return CopyRef(configured.NewRef())
+	}
+
 	if cached := p.getRealSchemaFromDoc(fk); cached != nil {
 		// updateDescription cannot be used here: it would pollute the comments of the structure
 		v := CopyRef(cached)
@@ -330,7 +336,14 @@ func (p *TypeParser) describeWhenTheTypeIs(typeSpec *ast.TypeSpec, fullKey strin
 // ends in: Money for type A = B; type B Money.
 func (p *TypeParser) rootTypeKey(spec *ast.TypeSpec) string {
 	for range 32 {
-		ident, ok := spec.Type.(*ast.Ident)
+		expr := spec.Type
+		switch instance := expr.(type) {
+		case *ast.IndexExpr: // an instance of a generic type is the generic type
+			expr = instance.X
+		case *ast.IndexListExpr:
+			expr = instance.X
+		}
+		ident, ok := expr.(*ast.Ident)
 		if !ok || p.pkg == nil || p.pkg.TypesInfo == nil {
 			break
 		}

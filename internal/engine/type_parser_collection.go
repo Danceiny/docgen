@@ -35,6 +35,11 @@ func (p *TypeParser) parseMap(expr *ast.MapType, ctx *ParseContext) *openapi3.Sc
 	if valueSchema == nil {
 		valueSchema = defaultSchemaRef()
 	}
+	if !settings.CompatLegacyOutput {
+		// The values are of a type that is a component, not of any type, though what
+		// the copy of it that was taken says may be empty so far.
+		valueSchema = p.asReference(valueSchema)
+	}
 	additional := additionalPropertiesOf(valueSchema)
 	if settings.CompatLegacyOutput {
 		// kin-openapi writes the flag and not the schema when both are set, which

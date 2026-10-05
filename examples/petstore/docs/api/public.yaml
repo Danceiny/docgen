@@ -35,9 +35,9 @@ components:
                 category:
                     $ref: '#/components/schemas/example.com.petstore.pet.domain.Category'
                 fee:
-                    allOf:
-                        - $ref: '#/components/schemas/example.com.petstore.pet.domain.Price'
                     description: Fee is the adoption fee.
+                    example: "12.50"
+                    type: string
                 id:
                     description: ID is assigned when the pet is created.
                     example: p-1001
@@ -60,13 +60,6 @@ components:
                 - name
             title: Pet
             type: object
-        example.com.petstore.pet.domain.Price:
-            description: |-
-                Price is an amount of money in dollars. It is written as a string such as
-                "12.50", not as a number, so that no client rounds it.
-            example: "12.50"
-            title: Price
-            type: string
         example.com.petstore.pet.domain.Size:
             description: "Size is how big a pet grows. The values are what iota counts, and the document\nhas them.\n\nEnums \n- `SizeSmall` (`0`): means up to 10 kg.\n- `SizeMedium` (`1`): means up to 25 kg.\n- `SizeLarge` (`2`): means more than that.\n"
             enum:
