@@ -26,6 +26,9 @@ func (p *TypeParser) parseMap(expr *ast.MapType, ctx *ParseContext) *openapi3.Sc
 	if valueSchema == nil && p.isFuncOrChan(expr.Value) {
 		return nil // a map of functions has nothing to describe
 	}
+	if valueSchema == nil && !settings.CompatLegacyOutput && p.isUnrepresentable(expr.Value) {
+		return nil // nor has a map of what JSON has no value for, and the value said so
+	}
 	// Create a standards-compliant map schema. Keep the value type in
 	// additionalProperties; putting a key schema into an extension caused the
 	// generator to manufacture an `unknown` component ref for runtime maps.
@@ -110,10 +113,18 @@ func (p *TypeParser) parseArray(expr *ast.ArrayType, ctx *ParseContext) *openapi
 		if elementRef == nil && p.isFuncOrChan(expr.Elt) {
 			return nil // a list of functions has nothing to describe
 		}
+		if elementRef == nil && !settings.CompatLegacyOutput && p.isUnrepresentable(expr.Elt) {
+			return nil // nor has a list of what JSON has no value for, and the element said so
+		}
 		if elementRef == nil && p.isTypeParam(expr.Elt) {
 			// The element of a list in a generic declaration is only known where the
-			// declaration is instantiated.
+			// declaration is instantiated, and what an instance makes of it is not
+			// read: the list is a list of anything. Documents that keep the old way of
+			// writing have the placeholder of a type that was not described.
 			elementRef = defaultSchemaRef()
+			if !settings.CompatLegacyOutput {
+				elementRef = &openapi3.SchemaRef{Value: anySchema()}
+			}
 		}
 		if elementRef == nil {
 			warnAt("array element type is unknown, using the default schema",
@@ -202,6 +213,27 @@ func (p *TypeParser) isFuncOrChan(expr ast.Expr) bool {
 	}
 	switch t.Underlying().(type) {
 	case *types.Signature, *types.Chan:
+		return true
+	}
+	return false
+}
+
+// isUnrepresentable reports whether a type is one that JSON has no value for: a
+// complex number or an unsafe pointer. Describing the type says so.
+func (p *TypeParser) isUnrepresentable(expr ast.Expr) bool {
+	if p.pkg == nil || p.pkg.TypesInfo == nil {
+		return false
+	}
+	t := p.pkg.TypesInfo.TypeOf(expr)
+	if t == nil {
+		return false
+	}
+	basic, ok := t.Underlying().(*types.Basic)
+	if !ok {
+		return false
+	}
+	switch basic.Kind() {
+	case types.Complex64, types.Complex128, types.UnsafePointer:
 		return true
 	}
 	return false

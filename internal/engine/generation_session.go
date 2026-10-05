@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"golang.org/x/tools/go/packages"
@@ -24,6 +25,7 @@ type GenerationSession struct {
 	audience   Audience
 	mu         sync.Mutex
 	valueCheck *valueChecker // for the document of the session, made when a field needs it
+	module     *Module       // the package graph, which sessions of one module share
 }
 
 // checkerOf is the checker of the values of the tags of the fields of the
@@ -45,7 +47,23 @@ func WithAudience(a Audience) SessionOption {
 	return func(s *GenerationSession) { s.audience = a }
 }
 
-func NewGenerationSession(moduleDir string, opts ...SessionOption) (*GenerationSession, error) {
+// WithModule gives the session the module that was loaded for it, so that
+// loading and type-checking the module, which is most of what a run costs, is not
+// done again for every document.
+func WithModule(m *Module) SessionOption {
+	return func(s *GenerationSession) { s.module = m }
+}
+
+// Module is the package graph of a module, loaded and type-checked. The sessions
+// of the documents generated from one module share it, and only read it.
+type Module struct {
+	dir      string
+	packages []*packages.Package
+}
+
+// LoadModule loads and type-checks the module in a directory, the way go build
+// ./... does, and fails, saying why, when a package of it does not build.
+func LoadModule(moduleDir string) (*Module, error) {
 	abs, err := filepath.Abs(moduleDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve module dir: %w", err)
@@ -64,6 +82,7 @@ func NewGenerationSession(moduleDir string, opts ...SessionOption) (*GenerationS
 			packages.NeedImports | packages.NeedDeps | packages.NeedModule,
 		Dir: abs,
 	}
+	start := time.Now()
 	pkgs, loadErr := packages.Load(cfg, "./...")
 	if loadErr != nil {
 		return nil, fmt.Errorf("load package graph: %w", loadErr)
@@ -72,17 +91,30 @@ func NewGenerationSession(moduleDir string, opts ...SessionOption) (*GenerationS
 		return nil, err
 	}
 	sort.Slice(pkgs, func(i, j int) bool { return pkgs[i].ID < pkgs[j].ID })
-	s := &GenerationSession{moduleDir: abs, packages: pkgs, imports: make(map[string]*packages.Package), resolving: make(map[string]bool), hidden: make(map[string]bool)}
-	for _, pkg := range pkgs {
+	Logger().Debug("module loaded", "dir", abs, "packages", len(pkgs), "took", time.Since(start).Round(time.Millisecond))
+	return &Module{dir: abs, packages: pkgs}, nil
+}
+
+func NewGenerationSession(moduleDir string, opts ...SessionOption) (*GenerationSession, error) {
+	s := &GenerationSession{imports: make(map[string]*packages.Package), resolving: make(map[string]bool), hidden: make(map[string]bool)}
+	for _, opt := range opts {
+		opt(s)
+	}
+	if s.module == nil {
+		module, err := LoadModule(moduleDir)
+		if err != nil {
+			return nil, err
+		}
+		s.module = module
+	}
+	s.moduleDir, s.packages = s.module.dir, s.module.packages
+	for _, pkg := range s.packages {
 		if pkg.Module != nil && pkg.Module.Main {
 			ModuleName = pkg.Module.Path
 			break
 		}
 	}
-	for _, opt := range opts {
-		opt(s)
-	}
-	for _, pkg := range pkgs {
+	for _, pkg := range s.packages {
 		s.index(pkg, make(map[string]bool))
 	}
 	return s, nil
@@ -163,6 +195,14 @@ func (s *GenerationSession) markHidden(key string) {
 	s.mu.Unlock()
 }
 
+// Hides reports whether the document of the session hides the type with the key,
+// by its //apidoc: directive or by its name, which leaves it no schema.
+func (s *GenerationSession) Hides(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.hidden[key]
+}
+
 // HiddenTypeOf returns the key of a type that the method takes or returns and
 // that the document hides, or "". An operation cannot be described without the
 // types it uses, so the pipeline leaves it out and says so.
@@ -220,5 +260,7 @@ func (s *GenerationSession) index(pkg *packages.Package, seen map[string]bool) {
 func (s *GenerationSession) Close() {
 	s.packages = nil
 	s.imports = nil
+	s.module = nil
+	s.valueCheck = nil
 	ResetGenerationCaches()
 }

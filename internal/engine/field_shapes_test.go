@@ -360,7 +360,17 @@ func TestExamplesOfFieldsWhoseTypesAreDeclaredLaterAreJudgedByThoseTypes(t *test
 		"noCity":   "{}",
 		"badTags":  `["bogus"]`,
 		"badChild": `{"name":"n"}`,
+		"status":   "bogus",
 	}, rejected, "and each is said, with the field")
+
+	// A field that says nothing of itself once its example is left out is the plain
+	// reference in the struct that has it and in the struct that embeds it.
+	for _, name := range []string{"Kid", "Parent"} {
+		status := doc.Components.Schemas["github.com.Danceiny.docgen.internal.engine.testdata.laterdecl."+name].Value.Properties["status"]
+		require.NotNil(t, status, name)
+		assert.NotEmpty(t, status.Ref, "%s: the reference itself", name)
+		assert.Empty(t, status.Value.AllOf, "%s: not a wrapper of it that says nothing", name)
+	}
 }
 
 // A union, an interface that says @autowire: true, is made of the types that

@@ -66,7 +66,40 @@ type Order struct {
 	InternalAfter `json:"-"`
 	// Level is an enum with a hidden name: it is shown, without its values.
 	Level InternalLevel `json:"level"`
+
+	// Derived is declared as a type that is hidden.
+	Derived Derived `json:"derived"`
+	// DerivedList is declared as a list of one.
+	DerivedList DerivedList `json:"derivedList"`
+	// DerivedAlias is another name for one.
+	DerivedAlias DerivedAlias `json:"derivedAlias"`
+	// DerivedLevel is declared as the enum that is hidden by its name.
+	DerivedLevel DerivedLevel `json:"derivedLevel"`
+	// DerivedShown is declared as a type with a hidden name that says it is shown.
+	DerivedShown DerivedShown `json:"derivedShown"`
+	// DerivedOwn says it is shown, though it is declared as a hidden type.
+	DerivedOwn DerivedOwn `json:"derivedOwn"`
 }
+
+// Derived is declared as a type that the public document hides.
+type Derived InternalBefore
+
+// DerivedList is a list of a type that the public document hides.
+type DerivedList []InternalBefore
+
+// DerivedAlias is another name for a type that the public document hides.
+type DerivedAlias = InternalBefore
+
+// DerivedLevel is declared as an enum that the public document hides.
+type DerivedLevel InternalLevel
+
+// DerivedShown is declared as a type that the public document shows.
+type DerivedShown InternalButPublic
+
+// DerivedOwn says what it is itself.
+//
+//apidoc:public
+type DerivedOwn InternalBefore
 
 // InternalAfter is hidden from the public document by its name, and is declared
 // after the type that uses it.

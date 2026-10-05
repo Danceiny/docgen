@@ -20,3 +20,17 @@ type Pair[K comparable, V any] struct {
 	// Count is a field of a plain type.
 	Count int `json:"count"`
 }
+
+// Num is a constraint of a type parameter.
+type Num interface{ ~int | ~string }
+
+// Boxed has a type parameter that has a constraint of its own.
+type Boxed[T Num] struct {
+	V T `json:"v"`
+}
+
+// Keyed is a map type with two type parameters, the first with a constraint.
+type Keyed[K comparable, V any] map[K]V
+
+// IntPage is declared as an instance of a generic type.
+type IntPage Page[int]

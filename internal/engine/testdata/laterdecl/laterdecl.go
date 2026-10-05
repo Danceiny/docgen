@@ -56,3 +56,16 @@ type Child struct {
 type Base struct {
 	ID string `json:"id" validate:"required"`
 }
+
+// Parent has the fields of Kid, which is declared after it, and one of them has an
+// example that its type does not allow: it says nothing of itself but its type,
+// for Kid and for Parent alike.
+type Parent struct {
+	Kid
+	Own string `json:"own"`
+}
+
+// Kid has a field with an example that Status does not allow.
+type Kid struct {
+	Status Status `json:"status" example:"bogus"`
+}

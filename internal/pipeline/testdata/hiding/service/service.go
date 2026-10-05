@@ -40,3 +40,17 @@ func (ShopService) Level(ctx context.Context, req *domain.Order) (*domain.Intern
 func (ShopService) Note(ctx context.Context, req *domain.StaffNote) (*domain.Order, error) {
 	return nil, nil
 }
+
+// Made takes a type that is declared as one that the public document hides.
+//
+// @tags: public
+func (ShopService) Made(ctx context.Context, req *domain.Derived) (*domain.Order, error) {
+	return nil, nil
+}
+
+// Made2 returns a list that is declared as a list of one.
+//
+// @tags: public
+func (ShopService) Made2(ctx context.Context, req *domain.Order) (*domain.DerivedList, error) {
+	return nil, nil
+}

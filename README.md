@@ -233,9 +233,12 @@ with no annotation is shown everywhere.
 
 A hidden type has no schema, and neither has anything that would refer to it: a
 field of the type, of a list or map of it, or that embeds it, is left out, and so
-is an operation that takes or returns it (with a warning that says which). An
-enum with an `//apidoc:hidden` directive is the exception: it is shown, with its
-values hidden; one that is hidden by its name is left out like any type.
+is an operation that takes or returns it (with a warning that says which). That
+includes a type that is declared as a hidden type, `type State InternalState` or
+`type States []InternalState`, whatever its own directive says: there is nothing
+left to describe it by. An enum with an `//apidoc:hidden` directive is the
+exception: it is shown, with its values hidden; one that is hidden by its name is
+left out like any type.
 
 An older form, `apidoc:"Staff"`, shows the field only in the documents that list
 `Staff` in `legacy_field_tokens`. Any other value of the tag hides the field from
@@ -456,12 +459,27 @@ compat:
     describe a struct, a field of a struct that an embedded struct has too is the
     embedded one when it is written after it, an embedded list or map is left out,
     and an enum hidden by its name or a map of maps of a hidden type is not hidden;
-  - `@generic` without a semicolon leaves the candidates in the description.
+  - `@generic` without a semicolon leaves the candidates in the description, and
+    a candidate after a comma and a space is lost (`@generic: Product, Order` is
+    the candidate `Product`);
+  - an `@autowire` union keeps the marker `pattern: default` next to its
+    alternatives and has the line `@autowire: true` in its description, and it has
+    no alternatives when a field that uses it is read between its declaration and
+    the point where they are added; a list of a type parameter has the
+    placeholder as its items;
+  - a type declared as a hidden type (`type S InternalState`, `type S []InternalState`)
+    is not hidden with it but is a placeholder, and a struct that has a field of
+    the name of one it embeds is required to have it when the embedded one is;
+  - the order of the fields a schema lists (`x-apifox-orders`) has a name twice
+    when a field shadows an embedded one, and names fields that a hidden type
+    took away;
 
   And what was wrong in the documents: a public document writes the types that
   fields use in place of references, which makes it grow with the number of paths
   to a type, not with the number of types, and an operation whose comment starts
-  with an annotation has that line as its summary.
+  with an annotation has that line as its summary. The check of the document
+  follows every reference as well, so for a module of thousands of types that
+  refer to each other it takes minutes, not seconds.
 
 ## Known limitations
 
@@ -481,14 +499,16 @@ on them.
   `json:"x,nullable"` says so.
 - The constants of an enum must be declared in the package of the type.
 - **Generics are documented as declared**, as said above: only one type parameter
-  is supported, and a type-parameter field without `@generic` has no schema.
+  is supported, a type-parameter field without `@generic` has no schema, and a
+  list of a type parameter (`Items []T`) is a list of anything, whatever the type
+  argument of an instance is.
 - **Query parameters are listed by hand** in `request.query`, not read from the
   struct, and apply to every operation that takes the type.
 - The request and response types of an operation must be declared in a package
   that matches `models`.
 - The documents are OpenAPI 3.0; kin-openapi does not write 3.1.
-- Every run loads and type-checks the whole module (`./...`), and fails, saying
-  why, when a package of it does not build.
+- Every run loads and type-checks the whole module (`./...`) once, for all of its
+  documents, and fails, saying why, when a package of it does not build.
 
 ## Compatibility
 

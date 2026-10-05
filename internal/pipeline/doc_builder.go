@@ -9,18 +9,42 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
+// moduleLoader loads the module that is documented once, when the first document
+// needs it, for every document of a run: loading and type-checking it is most of
+// what a run costs, and what it gives is only read.
+type moduleLoader struct {
+	module *engine.Module
+}
+
+func (l *moduleLoader) get() (*engine.Module, error) {
+	if l.module == nil {
+		module, err := engine.LoadModule(rootDir)
+		if err != nil {
+			return nil, err
+		}
+		l.module = module
+	}
+	return l.module, nil
+}
+
 // buildDoc generates one document as its configuration describes it.
-func buildDoc(d config.Doc, cfg *config.Config, first bool) error {
+func buildDoc(d config.Doc, cfg *config.Config, first bool, loader *moduleLoader) error {
 	overlays, err := loadOverlays(rootDir, d.Overlay)
 	if err != nil {
 		return err
 	}
 	audience := engine.Audience{Name: d.Audience, LegacyFieldTokens: d.LegacyFieldTokens, HiddenTypePrefixes: d.HideTypePrefixes}
-	session, err := engine.NewGenerationSession(rootDir, engine.WithAudience(audience))
+	module, err := loader.get()
+	if err != nil {
+		return err
+	}
+	session, err := engine.NewGenerationSession(rootDir, engine.WithAudience(audience), engine.WithModule(module))
 	if err != nil {
 		return err
 	}
 	defer session.Close()
+	hides = session.Hides
+	defer func() { hides = nil }()
 
 	var servers openapi3.Servers
 	for _, s := range d.Servers {

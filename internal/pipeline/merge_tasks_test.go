@@ -189,3 +189,18 @@ func TestFieldOrdersListOnlyTheFieldsASchemaHas(t *testing.T) {
 		t.Error("a schema with no field has no order of them")
 	}
 }
+
+// The entries of generic_titles are titles: the type that one names is what comes
+// before the brackets of its type arguments, so an instance is not reported as a
+// type that the module does not declare.
+func TestTheTypeAGenericTitleNamesIsWhatComesBeforeItsBrackets(t *testing.T) {
+	cfg := &config.Config{GenericTitles: []string{"example.com.shop.Page[Product]", "example.com.shop.Envelope"}}
+	var got []string
+	for _, key := range typeKeysOf(cfg) {
+		got = append(got, key.in+" "+key.key)
+	}
+	want := []string{"generic_titles example.com.shop.Envelope", "generic_titles example.com.shop.Page"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("keys = %q, want %q", got, want)
+	}
+}

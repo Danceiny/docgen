@@ -104,7 +104,9 @@ func (c *valueChecker) twin(schema *openapi3.Schema) *openapi3.Schema {
 		if r == nil {
 			return nil
 		}
-		return &openapi3.SchemaRef{Value: c.twin(c.schemaOf(r))}
+		// A reference stays one: the message of a failed validation writes the
+		// schema out, and a type that contains itself would be written out forever.
+		return &openapi3.SchemaRef{Ref: r.Ref, Value: c.twin(c.schemaOf(r))}
 	}
 	twin.Items = ref(schema.Items)
 	twin.Not = ref(schema.Not)

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"go/ast"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -98,4 +99,19 @@ func TestTheCheckerMakesTheTwinOfASchemaOnce(t *testing.T) {
 	assert.Same(t, first, first.AdditionalProperties.Schema.Value)
 	assert.NoError(t, c.check(node, map[string]any{"next": map[string]any{"next": map[string]any{}}}))
 	assert.Len(t, c.twins, 3, "the type, the list and the oneOf, each once")
+
+	err := c.check(node, map[string]any{"next": map[string]any{"items": "not a list"}})
+	require.Error(t, err, "a value that is not allowed is refused")
+	assert.Contains(t, err.Error(), "value must be an array", "and the message of that can be written, though the type contains itself")
+}
+
+// A nil pointer to a node is not a node to ask the position of: it is where
+// nothing is.
+func TestPositionOfANilNodeOfAConcreteTypeIsNowhere(t *testing.T) {
+	pkg := loadFixture(t, "testdata/tagvalues")
+	assert.Equal(t, "", positionOf(pkg, (*ast.Field)(nil)))
+	assert.Equal(t, "", positionOf(pkg, (*ast.TypeSpec)(nil)))
+	assert.Equal(t, "", positionOf(pkg, nil))
+	assert.Equal(t, "", positionOf(nil, &ast.Field{}))
+	assert.NotEmpty(t, positionOf(pkg, pkg.Syntax[0]))
 }

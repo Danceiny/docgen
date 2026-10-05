@@ -36,8 +36,10 @@ const DefaultInfoVersion = "0.0.1"
 type Config struct {
 	// Version is the schema version of the file; only 1 exists.
 	Version int `yaml:"version"`
-	// GenericTitles are the full keys of generic types whose oneOf alternatives
-	// must not be narrowed by the type arguments in their title.
+	// GenericTitles are the titles of the schemas whose oneOf alternatives are kept
+	// whole, not narrowed by the type arguments in the title that holds them: the
+	// full key of a type, or the full key with the type arguments of an instance
+	// in brackets, as a schema is titled.
 	GenericTitles []string `yaml:"generic_titles"`
 	// TypeMap fixes the schema of types, keyed by full key (the dotted import path
 	// followed by the type name), instead of describing them from their source.
@@ -419,6 +421,14 @@ func (c *Config) validate() error {
 	return errors.Join(problems...)
 }
 
+// TitleKey is the full key of the type that a title names: the title of the
+// schema of an instance of a generic type has its type arguments in brackets,
+// Page[Product], and the type is Page.
+func TitleKey(title string) string {
+	key, _, _ := strings.Cut(title, "[")
+	return key
+}
+
 // validateTypeKeys rejects a key that names a type in a way no type is named. A
 // full key is the import path with its slashes turned into dots, then a dot and
 // the name of the type; a slash in one is a path that was not converted, and the
@@ -430,8 +440,8 @@ func (c *Config) validateTypeKeys() []error {
 			problems = append(problems, fmt.Errorf("%s: %q has a slash; a type is named by its full key, the import path with dots instead of slashes and then the name of the type, such as %q", in, key, strings.ReplaceAll(key, "/", ".")))
 		}
 	}
-	for _, key := range c.GenericTitles {
-		check("generic_titles", key)
+	for _, title := range c.GenericTitles {
+		check("generic_titles", TitleKey(title))
 	}
 	for key := range c.TypeMap {
 		check("type_map", key)

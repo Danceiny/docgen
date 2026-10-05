@@ -25,6 +25,11 @@ var rootDir, outDir string
 // run.
 var legacyOutput bool
 
+// hides says whether the document that is being generated hides the type with a
+// key, which is what a reference to a type that has no schema is explained by. It
+// is set while a document is generated.
+var hides func(key string) bool
+
 // Options selects what Run generates.
 type Options struct {
 	// Dir is the root of the module to document; it must contain go.mod.
@@ -63,9 +68,10 @@ func Run(opts Options) error {
 	engine.Configure(settings)
 	engine.SetLogger(opts.Logger)
 
+	loader := &moduleLoader{}
 	for i, d := range docs {
 		start := time.Now()
-		if err := buildDoc(d, opts.Config, i == 0); err != nil {
+		if err := buildDoc(d, opts.Config, i == 0, loader); err != nil {
 			return fmt.Errorf("document %q: %w", d.Name, err)
 		}
 		engine.Logger().Info("document generated", "document", d.Name, "output", d.Output, "took", time.Since(start).Round(time.Millisecond))

@@ -158,11 +158,11 @@ func TestAHiddenTypeIsLeftOutWithEverythingThatRefersToIt(t *testing.T) {
 	// The public document: the customer sees ID and the types that are shown.
 	order := public.Components.Schemas[hidingPrefix+"Order"]
 	require.NotNil(t, order)
-	assert.Equal(t, []string{"id", "shown"}, propertyNames(order),
-		"every field of a hidden type is gone, in every shape; the override stays")
+	assert.Equal(t, []string{"derivedShown", "id", "shown"}, propertyNames(order),
+		"every field of a hidden type is gone, in every shape, and so is every field of a type declared as one; the override stays")
 	assert.Contains(t, propertyNames(order.Value.Properties["shown"]), "note", "a directive overrules the name")
 
-	for _, hidden := range []string{"InternalBefore", "InternalAfter", "StaffNote", "Draft"} {
+	for _, hidden := range []string{"InternalBefore", "InternalAfter", "StaffNote", "Draft", "Derived", "DerivedList", "DerivedAlias", "DerivedLevel"} {
 		assert.NotContains(t, public.Components.Schemas, hidingPrefix+hidden, "%s is hidden from the public document", hidden)
 	}
 	assert.NotContains(t, public.Components.Schemas, hidingPrefix+"InternalLevel", "an enum with a hidden name is hidden by it")
@@ -171,12 +171,18 @@ func TestAHiddenTypeIsLeftOutWithEverythingThatRefersToIt(t *testing.T) {
 	assert.Nil(t, public.Paths.Value("/api/shop/risk"), "an operation that returns a hidden type is left out")
 	assert.Nil(t, public.Paths.Value("/api/shop/note"), "an operation that takes a hidden type is left out")
 	assert.Nil(t, public.Paths.Value("/api/shop/level"), "an operation that returns an enum that is hidden by its name is left out too")
+	assert.Nil(t, public.Paths.Value("/api/shop/made"), "an operation that takes a type that is declared as a hidden one is left out")
+	assert.Nil(t, public.Paths.Value("/api/shop/made2"), "so is one that returns a list of one")
+	assert.Contains(t, public.Components.Schemas, hidingPrefix+"DerivedShown")
+	assert.NotContains(t, public.Components.Schemas, hidingPrefix+"DerivedOwn", "a type declared as a hidden type has nothing to be described by, whatever it says of itself")
 
 	// The internal document hides only what is hidden from everybody.
 	internalOrder := internal.Components.Schemas[hidingPrefix+"Order"]
 	require.NotNil(t, internalOrder)
-	assert.Equal(t, []string{"after", "afterPtrList", "before", "beforeList", "beforeMap", "beforeNested", "beforePtrList", "beforeValue", "id", "level", "note", "shown"},
+	assert.Equal(t, []string{"after", "afterPtrList", "before", "beforeList", "beforeMap", "beforeNested", "beforePtrList", "beforeValue",
+		"derived", "derivedAlias", "derivedLevel", "derivedList", "derivedOwn", "derivedShown", "id", "level", "note", "shown"},
 		propertyNames(internalOrder))
+	assert.NotNil(t, internal.Paths.Value("/api/shop/made"))
 	assert.NotContains(t, internal.Components.Schemas, hidingPrefix+"Draft")
 	assert.Contains(t, internal.Components.Schemas, hidingPrefix+"StaffNote")
 	assert.NotNil(t, internal.Paths.Value("/api/shop/risk"))
@@ -550,6 +556,36 @@ func TestATypeThatCannotBeDescribedIsReported(t *testing.T) {
 	assert.NotEmpty(t, reported, "the placeholder of the interface is in the document, and the run said so")
 }
 
+// A type that is declared as a hidden type, and says it is shown, is hidden: there
+// is nothing to describe it by. The run says so.
+func TestATypeDeclaredAsAHiddenTypeIsHiddenWhateverItsDirectiveSays(t *testing.T) {
+	cfg, err := config.Load("testdata/hiding/docgen.yaml")
+	require.NoError(t, err)
+	log := &records{}
+	require.NoError(t, Run(Options{Dir: "testdata/hiding", Config: cfg, OutputDir: t.TempDir(), Logger: slog.New(log)}))
+
+	var said []string
+	for _, rec := range log.list {
+		if rec.Level == slog.LevelWarn && strings.Contains(rec.Message, "declared as a type that the document hides") {
+			said = append(said, attrOf(rec, "type")+" as "+attrOf(rec, "declaredAs"))
+		}
+	}
+	assert.Equal(t, []string{"DerivedOwn as InternalBefore"}, said, "once for the document that hides it, which is the public one")
+}
+
+// A reference to a type that the document hides, from an overlay, cannot be
+// written: the type has no schema. The error says that the type is hidden, not
+// that the package of the type does not match models.
+func TestAReferenceToAHiddenTypeIsExplainedByItsBeingHidden(t *testing.T) {
+	cfg, err := config.Load("testdata/hiding/docgen-overlay.yaml")
+	require.NoError(t, err)
+	err = Run(Options{Dir: "testdata/hiding", Config: cfg, OutputDir: t.TempDir()})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "example.com.hiding.domain.InternalBefore")
+	assert.Contains(t, err.Error(), "the document hides that type")
+	assert.NotContains(t, err.Error(), `pattern of "models"`)
+}
+
 // The order of the fields that a schema lists is the order of the fields it has: a
 // field of an embedded struct whose type the document hides is not one of them.
 func TestFieldOrdersLeaveOutTheFieldsAHiddenTypeTookAway(t *testing.T) {
@@ -587,4 +623,26 @@ func TestAnExampleThatAnOverlayMadeInvalidFailsTheRun(t *testing.T) {
 	assert.Contains(t, err.Error(), "example.com.examples.m.Owner")
 	assert.Contains(t, err.Error(), "home")
 	assert.Contains(t, err.Error(), "example")
+}
+
+// The module is loaded and type-checked once for all the documents of a run, not
+// once for each: it is most of what a run costs.
+func TestTheModuleIsLoadedOnceForAllTheDocumentsOfARun(t *testing.T) {
+	cfg, err := config.Load("testdata/hiding/docgen.yaml")
+	require.NoError(t, err)
+	require.Len(t, cfg.Docs, 2)
+	log := &records{}
+	require.NoError(t, Run(Options{Dir: "testdata/hiding", Config: cfg, OutputDir: t.TempDir(), Logger: slog.New(log)}))
+
+	loads, generated := 0, 0
+	for _, rec := range log.list {
+		switch rec.Message {
+		case "module loaded":
+			loads++
+		case "document generated":
+			generated++
+		}
+	}
+	assert.Equal(t, 2, generated)
+	assert.Equal(t, 1, loads, "one load for two documents")
 }

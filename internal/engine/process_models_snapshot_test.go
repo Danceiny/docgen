@@ -463,7 +463,10 @@ func TestProcessModels_GenericDeclarationsAreNotReportedAsProblems(t *testing.T)
 	page := doc.Components.Schemas["github.com.Danceiny.docgen.internal.engine.testdata.generics.Page"]
 	require.NotNil(t, page)
 	assert.Contains(t, page.Value.Properties, "total")
-	assert.Contains(t, page.Value.Properties, "items")
+	require.Contains(t, page.Value.Properties, "items")
+	items := page.Value.Properties["items"].Value
+	assert.True(t, items.Type.Is("array"))
+	assert.Equal(t, &openapi3.Schema{}, items.Items.Value, "a list of a type parameter is a list of anything, not of the placeholder of a type that was not described")
 
 	pair := doc.Components.Schemas["github.com.Danceiny.docgen.internal.engine.testdata.generics.Pair"]
 	require.NotNil(t, pair)
@@ -613,4 +616,67 @@ func TestMistypedAnnotationsAndDirectivesAreReported(t *testing.T) {
 	assert.Contains(t, types["Spaced"], "no space after the slashes")
 	assert.Contains(t, types["Bogus"], "scope that is not public, internal or hidden")
 	assert.NotContains(t, types, "Fine")
+}
+
+// A generic declaration whose type parameter has a constraint has the component
+// of its own name and no other, and a type declared as an instance of a generic
+// type has what that type has, as an alias does.
+func TestProcessModels_GenericDeclarationsHaveNoComponentsBesidesTheirOwn(t *testing.T) {
+	pkg := loadFixture(t, "testdata/generics")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "snapshot", Version: "generics"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+	const prefix = "github.com.Danceiny.docgen.internal.engine.testdata.generics."
+
+	var keys []string
+	for key := range doc.Components.Schemas {
+		keys = append(keys, strings.TrimPrefix(key, prefix))
+	}
+	sort.Strings(keys)
+	assert.Equal(t, []string{"Boxed", "IntPage", "Keyed", "Num", "Page", "Pair"}, keys,
+		"no Keyedcomparable beside Keyed, no NumNum beside Num, no IntPageint")
+	assert.Equal(t, prefix+"Keyed", doc.Components.Schemas[prefix+"Keyed"].Value.Title)
+	assert.True(t, doc.Components.Schemas[prefix+"Page"].Value.Properties["items"].Value.Items.Value.Type == nil, "a list of a type parameter is a list of anything")
+	assert.Equal(t, "#/components/schemas/"+prefix+"Num", doc.Components.Schemas[prefix+"Boxed"].Value.Properties["v"].Ref)
+	intPage := doc.Components.Schemas[prefix+"IntPage"]
+	assert.False(t, IsPlaceholder(intPage.Value), "it is not the placeholder of a type that was not described")
+	assert.NotEmpty(t, intPage.Ref+intPage.Value.Title)
+
+	legacy := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "snapshot", Version: "generics"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	withSettings(t, Settings{CompatLegacyOutput: true}, "github.com/Danceiny/docgen")
+	legacyDefers, legacyMerges := processModelsFor(pkg, legacy, testInternal)
+	runProcessModelsTasks(t, legacyDefers, legacyMerges, legacy)
+	assert.Contains(t, legacy.Components.Schemas, prefix+"Keyedcomparable", "documents that keep the old way of writing have it")
+	assert.True(t, IsPlaceholder(legacy.Components.Schemas[prefix+"Page"].Value.Properties["items"].Value.Items.Value),
+		"and the placeholder as the items of a list of a type parameter")
+}
+
+// A list or a map of a type JSON has no number for is left out with one warning,
+// as the type itself is, not described as a list of an unknown type.
+func TestAListOfAComplexNumberIsLeftOutWithOneWarning(t *testing.T) {
+	logs := captureLogs(t)
+	pkg := loadFixture(t, "testdata/nojson")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "snapshot", Version: "generics"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+
+	pages := doc.Components.Schemas["github.com.Danceiny.docgen.internal.engine.testdata.nojson.Pages"]
+	require.NotNil(t, pages)
+	assert.Equal(t, []string{"size"}, propertyNamesOf(pages))
+	var said []string
+	for _, rec := range logs.records {
+		if rec.Level >= slog.LevelWarn {
+			said = append(said, attrsOf(rec)["type"])
+		}
+	}
+	assert.Equal(t, []string{"complex64", "complex128"}, said, "one for each, and none about an unknown element")
+}
+
+func propertyNamesOf(schema *openapi3.SchemaRef) []string {
+	var names []string
+	for name := range schema.Value.Properties {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

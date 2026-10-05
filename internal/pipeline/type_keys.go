@@ -19,12 +19,13 @@ type typeKey struct{ in, key string }
 
 // typeKeysOf lists the keys of the configuration that name a type: the keys of
 // type_map, request.multipart, request.query and response.binary, the types of
-// headers and request.runtime_only, and generic_titles.
+// headers and request.runtime_only, and generic_titles, whose entries are titles:
+// the type is what comes before the brackets of the type arguments.
 func typeKeysOf(cfg *config.Config) []typeKey {
 	var keys []typeKey
 	add := func(in, key string) { keys = append(keys, typeKey{in, key}) }
-	for _, key := range cfg.GenericTitles {
-		add("generic_titles", key)
+	for _, title := range cfg.GenericTitles {
+		add("generic_titles", config.TitleKey(title))
 	}
 	for key := range cfg.TypeMap {
 		add("type_map", key)

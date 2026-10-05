@@ -641,6 +641,37 @@ docs:
 	}
 }
 
+// The entries of generic_titles are titles, and the title of an instance of a
+// generic type has its type arguments in brackets: it is the type that is named.
+func TestAGenericTitleNamesTheTypeBeforeItsBrackets(t *testing.T) {
+	for title, want := range map[string]string{
+		"example.com.shop.Page":                   "example.com.shop.Page",
+		"example.com.shop.Page[Product]":          "example.com.shop.Page",
+		"example.com.shop.Page[Product,Order]":    "example.com.shop.Page",
+		"example.com.shop.Pair[a.K,example.Item]": "example.com.shop.Pair",
+		"": "",
+	} {
+		if got := TitleKey(title); got != want {
+			t.Errorf("TitleKey(%q) = %q, want %q", title, got, want)
+		}
+	}
+	_, err := Parse([]byte(`
+version: 1
+generic_titles:
+  - "example.com/shop.Page[Product]"
+docs:
+  - name: internal
+    audience: internal
+    output: docs/api/api.yaml
+    info: {title: T}
+    models: ["*"]
+    services: ["*"]
+`))
+	if err == nil || !strings.Contains(err.Error(), `generic_titles: "example.com/shop.Page" has a slash`) {
+		t.Errorf("a title with a slash in its type: %v", err)
+	}
+}
+
 func TestLoadSaysWhatToDoWhenThereIsNoFile(t *testing.T) {
 	_, err := Load(filepath.Join(t.TempDir(), "docgen.yaml"))
 	if err == nil {

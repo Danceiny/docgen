@@ -153,8 +153,9 @@ func (p *TypeParser) parseTypeSpecOccupied(typeSpec *ast.TypeSpec, ctx *ParseCon
 	// Go alias declarations (`type Alias = Target`) must resolve the target
 	// schema without treating the alias component as the target's recursion
 	// key. Preserve the alias component identity while copying the resolved
-	// target shape.
-	if typeSpec.Assign.IsValid() {
+	// target shape. A type declared as an instance of a generic type is described
+	// as one: it has what the generic type has.
+	if typeSpec.Assign.IsValid() || (!settings.CompatLegacyOutput && isInstance(typeSpec.Type)) {
 		aliasCtx := *ctx
 		aliasCtx.FullKey = ""
 		schema = p.parse(typeSpec.Type, &aliasCtx)
@@ -189,6 +190,15 @@ func (p *TypeParser) parseTypeSpecOccupied(typeSpec *ast.TypeSpec, ctx *ParseCon
 	p.handleSchema(typeSpec, fullKey, schema, underlyingType, ctx)
 }
 
+// isInstance reports whether a type expression is an instance of a generic type.
+func isInstance(expr ast.Expr) bool {
+	switch expr.(type) {
+	case *ast.IndexExpr, *ast.IndexListExpr:
+		return true
+	}
+	return false
+}
+
 // parse is the core of parsing, without locks.
 func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.SchemaRef) {
 	if expr == nil {
@@ -206,7 +216,12 @@ func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.S
 		fk = p.generateTypeKey(expr)
 	}
 	if ctx.GenericValue != nil {
-		fk = getGenericFullKey(fk, ctx.GenericValue)
+		if settings.CompatLegacyOutput {
+			// The constraint of the type parameter is part of the key, so that a
+			// generic declaration with a constraint has a component of its own besides
+			// the one of the constraint: Mcomparable next to M.
+			fk = getGenericFullKey(fk, ctx.GenericValue)
+		}
 		ctx.FullKey = fk
 	}
 	defer func() {

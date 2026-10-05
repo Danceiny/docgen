@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -58,4 +60,27 @@ func TestAGenerationSessionSaysWhereToRunTheToolWhenThereIsNoModule(t *testing.T
 			t.Errorf("the error does not say %q: %v", want, err)
 		}
 	}
+}
+
+// The sessions of the documents of one module share its package graph, and
+// closing one does not take it from the others.
+func TestSessionsOfOneModuleShareItsPackages(t *testing.T) {
+	withSettings(t, Settings{}, ModuleName) // a session names the module it loads, for good
+	const dir = "../pipeline/testdata/ondemand"
+	module, err := LoadModule(dir)
+	require.NoError(t, err)
+	first, err := NewGenerationSession(dir, WithModule(module))
+	require.NoError(t, err)
+	second, err := NewGenerationSession(dir, WithModule(module))
+	require.NoError(t, err)
+
+	require.NotEmpty(t, first.Packages())
+	assert.Same(t, first.Packages()[0], second.Packages()[0], "the same packages, not a second load of them")
+	first.Close()
+	assert.Nil(t, first.Packages())
+	assert.NotEmpty(t, second.Packages(), "closing a session does not take the packages from the module")
+	assert.NotEmpty(t, module.packages)
+
+	_, err = LoadModule(t.TempDir())
+	assert.ErrorContains(t, err, "has no go.mod")
 }

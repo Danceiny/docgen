@@ -39,10 +39,19 @@ func (p *TypeParser) typeDeclaration(named *types.Named) (*ast.TypeSpec, *ast.Ge
 // namedTypeOf returns the named type an expression refers to, through pointers,
 // lists, arrays and maps (of their values), or nil.
 func (p *TypeParser) namedTypeOf(expr ast.Expr) *types.Named {
-	if p.pkg == nil || p.pkg.TypesInfo == nil || expr == nil {
+	if p.pkg == nil {
 		return nil
 	}
-	t := p.pkg.TypesInfo.TypeOf(expr)
+	return namedTypeIn(p.pkg.TypesInfo, expr)
+}
+
+// namedTypeIn is namedTypeOf for an expression of the package that the type
+// information is of.
+func namedTypeIn(info *types.Info, expr ast.Expr) *types.Named {
+	if info == nil || expr == nil {
+		return nil
+	}
+	t := info.TypeOf(expr)
 	for t != nil {
 		switch u := types.Unalias(t).(type) {
 		case *types.Pointer:
@@ -60,6 +69,28 @@ func (p *TypeParser) namedTypeOf(expr ast.Expr) *types.Named {
 		}
 	}
 	return nil
+}
+
+// hiddenNamed reports whether a named type is hidden from the document: because it
+// is declared as a type that is, type S InternalState, or a list or a map of one,
+// which leaves it nothing to be described by, whatever it says about itself; or by
+// what it declares about itself; or, when it declares nothing, by its name.
+func (p *TypeParser) hiddenNamed(named *types.Named, depth int) bool {
+	spec, decl, pkg := p.typeDeclaration(named)
+	if spec != nil && pkg != nil && depth < 16 && !isEnumType(pkg, spec) {
+		if next := namedTypeIn(pkg.TypesInfo, spec.Type); next != nil && next != named && p.hiddenNamed(next, depth+1) {
+			return true
+		}
+	}
+	if spec != nil {
+		if visibility := declaredVisibility(spec, decl); visibility != nil {
+			if isEnumType(pkg, spec) {
+				return false // shown, with its values hidden
+			}
+			return shouldHideByVisibilityOfType(visibility, spec.Name.Name, p.audience)
+		}
+	}
+	return shouldHideByDefault(named.Obj().Name(), p.audience)
 }
 
 // typeDocs lists the comments that can carry the directive of a type: the
@@ -94,6 +125,11 @@ func (p *TypeParser) referenceHidden(expr ast.Expr, fk string, ctx *ParseContext
 		// A reference to a type, as opposed to the declaration of one: what the
 		// type declares about itself has the last word over its name.
 		if named := p.namedTypeOf(expr); named != nil {
+			if !settings.CompatLegacyOutput {
+				// The type it is made of, not the key of the list or the map that holds
+				// it: a map of maps of pointers to it is as hidden as it is.
+				return p.hiddenNamed(named, 0)
+			}
 			if spec, decl, pkg := p.typeDeclaration(named); spec != nil {
 				if visibility := declaredVisibility(spec, decl); visibility != nil {
 					if isEnumType(pkg, spec) {
@@ -101,11 +137,6 @@ func (p *TypeParser) referenceHidden(expr ast.Expr, fk string, ctx *ParseContext
 					}
 					return shouldHideByVisibilityOfType(visibility, spec.Name.Name, p.audience)
 				}
-			}
-			if !settings.CompatLegacyOutput {
-				// The name of the type it is made of, not the key of the list or the map
-				// that holds it: a map of maps of pointers to it is as hidden as it is.
-				return shouldHideByDefault(named.Obj().Name(), p.audience)
 			}
 		}
 	}
@@ -154,7 +185,28 @@ func (p *TypeParser) declarationHidden(spec *ast.TypeSpec) bool {
 		}
 		return shouldHideByDefault(spec.Name.Name, p.audience)
 	}
-	return shouldHideType(p.pkg, spec, p.audience)
+	if shouldHideType(p.pkg, spec, p.audience) {
+		return true
+	}
+	return !settings.CompatLegacyOutput && p.declaredFromHidden(spec)
+}
+
+// declaredFromHidden reports whether a type is declared as a type that is hidden,
+// type S InternalState, or a list or a map of one. It has nothing to be described
+// by, and is hidden as whatever refers to it is, whatever it says about itself.
+func (p *TypeParser) declaredFromHidden(spec *ast.TypeSpec) bool {
+	if p.pkg == nil {
+		return false
+	}
+	next := namedTypeIn(p.pkg.TypesInfo, spec.Type)
+	if next == nil || !p.hiddenNamed(next, 0) {
+		return false
+	}
+	if _, decl := findTypeDeclaration(p.pkg, spec.Name.Name); declaredVisibility(spec, decl) != nil {
+		warnAt("a type that is declared as a type that the document hides is hidden too, whatever its //apidoc: directive says: nothing is left to describe it by",
+			"type", spec.Name.Name, "declaredAs", next.Obj().Name(), "at", p.at(spec))
+	}
+	return true
 }
 
 // markHidden records that a type of the module is hidden from the document, so

@@ -40,6 +40,9 @@ func positionOf(pkg *packages.Package, node ast.Node) string {
 	if pkg == nil || pkg.Fset == nil || node == nil {
 		return ""
 	}
+	if v := reflect.ValueOf(node); v.Kind() == reflect.Pointer && v.IsNil() {
+		return "" // a node of a type that is nil, which is not a nil node
+	}
 	pos := pkg.Fset.Position(node.Pos())
 	if !pos.IsValid() {
 		return ""
