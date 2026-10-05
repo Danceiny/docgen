@@ -605,11 +605,16 @@ func isRequiredField(field *ast.Field) bool {
 	return hasRule(validate, "required") || hasRule(binding, "required")
 }
 
-// hasRule reports whether a validate or binding tag has a rule: they are
-// separated by commas, required,email.
+// hasRule reports whether a validate or binding tag has a rule of the field: they
+// are separated by commas, required,email, and the rules after dive are those of
+// its elements.
 func hasRule(tag, rule string) bool {
 	for _, r := range strings.Split(tag, ",") {
-		if strings.TrimSpace(r) == rule {
+		r = strings.TrimSpace(r)
+		if r == "dive" {
+			return false // what follows is a rule of the elements, not of the field
+		}
+		if r == rule {
 			return true
 		}
 	}

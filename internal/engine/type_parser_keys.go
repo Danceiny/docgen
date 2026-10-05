@@ -65,7 +65,10 @@ func (p *TypeParser) generateTypeKeyUncached(expr ast.Expr) (out string) {
 			case *types.Basic:
 				return t.Name()
 			case *types.Pointer:
-				return p.generateTypeKeyForType(t.Elem())
+				if settings.CompatLegacyOutput {
+					return p.generateTypeKeyForType(t.Elem())
+				}
+				return p.keyOfPointee(t.Elem())
 			case *types.Slice:
 				return "array_of_" + p.generateTypeKeyForType(t.Elem())
 			case *types.Array:
@@ -141,6 +144,30 @@ func (p *TypeParser) generateTypeKeyUncached(expr ast.Expr) (out string) {
 		Logger().Error("expression has no key rule", "expr", goType(expr), "at", p.at(expr))
 		return fmt.Sprintf("unhandled_%T", expr)
 	}
+}
+
+// keyOfPointee makes the key of what a pointer points to: the key of the type
+// itself, whatever it is, so that a pointer to an alias, to a pointer, to a
+// list or to a map is described as the type it is a pointer to.
+func (p *TypeParser) keyOfPointee(t types.Type) string {
+	switch t := t.(type) {
+	case *types.Pointer:
+		return p.keyOfPointee(t.Elem())
+	case *types.Alias:
+		if obj := t.Obj(); obj != nil {
+			if pkg := obj.Pkg(); pkg != nil {
+				return fmt.Sprintf("%s.%s", strings.ReplaceAll(pkg.Path(), "/", "."), obj.Name())
+			}
+			return obj.Name()
+		}
+	case *types.Slice:
+		return "array_of_" + p.keyOfPointee(t.Elem())
+	case *types.Array:
+		return "array_of_" + strconv.FormatInt(t.Len(), 10) + "_" + p.keyOfPointee(t.Elem())
+	case *types.Map:
+		return fmt.Sprintf("map_%s_%s", p.keyOfPointee(t.Key()), p.keyOfPointee(t.Elem()))
+	}
+	return p.generateTypeKeyForType(t)
 }
 
 // generateTypeKeyForType makes the key of a go/types type.

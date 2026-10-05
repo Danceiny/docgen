@@ -150,3 +150,38 @@ func TestTagValuesAreReadByTheTypeOfTheField(t *testing.T) {
 	}
 	assert.Equal(t, map[string]string{"badCount": "abc", "badWhen": "2024-01-02", "badFlag": "maybe"}, fields)
 }
+
+// A name that stands for a type of the module is described as the type, whether
+// it is declared before the type or after it, and so are pointers to it, to
+// pointers, to lists and to lists of it.
+func TestAliasesAndPointersToThemAreDescribedAsWhatTheyStandFor(t *testing.T) {
+	logs := captureLogs(t)
+	withSettings(t, Settings{}, "github.com/Danceiny/docgen")
+	pkg := loadFixture(t, "testdata/aliases")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "aliases", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+	const prefix = "github.com.Danceiny.docgen.internal.engine.testdata.aliases."
+
+	for _, name := range []string{"Early", "Late"} {
+		alias := doc.Components.Schemas[prefix+name]
+		require.NotNil(t, alias, name)
+		assert.NotEqual(t, "default", alias.Value.Pattern, "%s is described, not left as the placeholder of a type that was not parsed yet", name)
+		assert.NotEmpty(t, alias.Value.Properties, name)
+	}
+
+	user := doc.Components.Schemas[prefix+"User"].Value.Properties
+	for _, name := range []string{"a", "b", "c", "d", "h", "i", "k"} {
+		assert.Contains(t, user[name].Ref, prefix, "%s refers to a component, not to a bare object", name)
+	}
+	for _, name := range []string{"f", "g"} {
+		assert.True(t, doc.Components.Schemas[prefix+"Name"].Value.Type.Is("string"))
+		assert.Contains(t, user[name].Ref, prefix+"Name", name)
+	}
+	for _, name := range []string{"e", "j", "l"} {
+		assert.True(t, user[name].Value.Type.Is("array"), "%s is a list", name)
+	}
+	for _, rec := range logs.records {
+		assert.Less(t, rec.Level, slog.LevelWarn, "%s %v", rec.Message, attrsOf(rec))
+	}
+}

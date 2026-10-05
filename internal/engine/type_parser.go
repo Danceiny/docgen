@@ -140,6 +140,16 @@ func (p *TypeParser) parseTypeSpecOccupied(typeSpec *ast.TypeSpec, ctx *ParseCon
 			underlyingType = ident.Name
 		}
 		p.handleSchema(typeSpec, fullKey, schema, underlyingType, ctx)
+		if !settings.CompatLegacyOutput && schema != nil && schema.Ref != "" && isDefaultSchema(schema.Value) {
+			// The type it stands for is declared further down, and is not described
+			// yet: the alias is described as soon as it is.
+			target := strings.TrimPrefix(schema.Ref, "#/components/schemas/")
+			p.defers.PushBack(func() {
+				if described := p.getRealSchemaFromDoc(target); described != nil && described.Value != nil {
+					p.updateSchemaInDocForce(fullKey, CopyRef(described))
+				}
+			})
+		}
 		return
 	}
 	switch t := typeSpec.Type.(type) {
@@ -189,7 +199,14 @@ func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.S
 			if settings.CompatLegacyOutput || schema.Ref == "" {
 				// nullability only matters in the context of a field
 				schema.Value.Nullable = isNullableFromField(ctx.Field)
-				schema.Value.Description = extractDescription(ctx.Doc, ctx.Comment)
+				// A comment is the description; without one, what the schema has
+				// already stays. A type that type_map gives a description has that
+				// one, whatever its own comment says.
+				desc := extractDescription(ctx.Doc, ctx.Comment)
+				described := ctx.FullKey != "" && settings.TypeMap[ctx.FullKey] != nil && schema.Value.Description != ""
+				if settings.CompatLegacyOutput || !described && (desc != "" || schema.Value.Description == "") {
+					schema.Value.Description = desc
+				}
 			}
 			// A reference has no description or nullability of its own: that of the
 			// field that uses it is written with it (see describeReference), since

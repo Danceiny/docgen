@@ -38,13 +38,14 @@ type Quiet struct {
 
 // Rules says which fields are required with the rules of a validator.
 type Rules struct {
-	Plain    string `json:"plain" validate:"required"`
-	Several  string `json:"several" validate:"required,email"`
-	Binding  int    `json:"binding" binding:"required,gt=0"`
-	Spaced   string `json:"spaced" validate:"min=1, required"`
-	Optional string `json:"optional" validate:"omitempty,email"`
-	Other    string `json:"other" validate:"required_if=Plain x"`
-	Tagged   string `json:"tagged" required:"true"`
+	Plain    string   `json:"plain" validate:"required"`
+	Several  string   `json:"several" validate:"required,email"`
+	Binding  int      `json:"binding" binding:"required,gt=0"`
+	Spaced   string   `json:"spaced" validate:"min=1, required"`
+	Optional string   `json:"optional" validate:"omitempty,email"`
+	Other    string   `json:"other" validate:"required_if=Plain x"`
+	Tagged   string   `json:"tagged" required:"true"`
+	Elements []string `json:"elements" validate:"omitempty,dive,required"`
 }
 
 // Anything has fields that take any JSON value.

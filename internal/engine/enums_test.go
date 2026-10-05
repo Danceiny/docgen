@@ -117,3 +117,18 @@ func TestEnumsOfOrdinaryDeclarations(t *testing.T) {
 		})
 	}
 }
+
+// What type_map says of a type, its description included, is what the type has,
+// whatever its comment says; a field of the type that has a comment of its own has that.
+func TestTypeMapDescriptionIsTheDescriptionOfTheType(t *testing.T) {
+	const key = "github.com.Danceiny.docgen.internal.engine.testdata.enums.Plain"
+	withSettings(t, Settings{TypeMap: map[string]*openapi3.Schema{key: {Type: &openapi3.Types{"string"}, Description: "text of the plain kind"}}}, "github.com/Danceiny/docgen")
+	pkg := loadFixture(t, "testdata/enums")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "enums", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+
+	plain := doc.Components.Schemas[key]
+	require.NotNil(t, plain)
+	assert.Equal(t, "text of the plain kind", plain.Value.Description, "not the comment of the type, Plain has no constants")
+}
