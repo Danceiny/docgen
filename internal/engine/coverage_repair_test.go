@@ -95,10 +95,10 @@ func TestTypeParserSyntheticCollections(t *testing.T) {
 	if iface.Value == nil || iface.Value.Type != nil || len(iface.Value.AnyOf) != 0 {
 		t.Fatalf("the empty interface is the schema that has no type: %+v", iface.Value)
 	}
-	withSettings(t, Settings{CompatLegacySchemaShapes: true}, "")
+	withSettings(t, Settings{CompatLegacyOutput: true}, "")
 	legacy := p.parseInterface(&ast.InterfaceType{Methods: &ast.FieldList{}}, &ParseContext{})
 	if legacy.Value == nil || len(legacy.Value.AnyOf) != 3 {
-		t.Fatal("a configuration that keeps legacy_schema_shapes gets the union of a string, an integer and an object")
+		t.Fatal("a configuration that keeps legacy_output gets the union of a string, an integer and an object")
 	}
 }
 

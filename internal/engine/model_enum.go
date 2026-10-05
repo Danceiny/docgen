@@ -140,7 +140,7 @@ func generateEnumSchemaFromEntry(entries []EnumEntry, underlyingType string, whe
 
 // collectEnumEntries collects the names, the values and the comments of the constants of an enum.
 func collectEnumEntries(pkg *packages.Package, typeName string) []EnumEntry {
-	if !settings.CompatLegacySchemaShapes {
+	if !settings.CompatLegacyOutput {
 		if entries, ok := collectEnumEntriesByType(pkg, typeName); ok {
 			return entries
 		}

@@ -69,6 +69,16 @@ func (Service) Name() string { return "shop" }
 // @headerType: Nobody
 func (Service) Header(ctx context.Context, req *Req) (*Req, error) { return nil, nil }
 
+// Loose has @param annotations that are not well formed, and one that is.
+//
+// @param:qurey limit int required "a typo in the place"
+// @param:query count int "no required or optional"
+// @param:query size  int   optional   "extra spaces are fine"
+// @param:query name string optional the description is not in quotes
+func (Service) Loose(ctx context.Context, limit int, count int, size int, name string) (*Req, error) {
+	return nil, nil
+}
+
 // Two takes two requests, and the second has no place in the document.
 // @path: /two
 func (Service) Two(ctx context.Context, a *Req, b *Req) (*Req, error) { return nil, nil }

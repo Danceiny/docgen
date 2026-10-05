@@ -1,8 +1,10 @@
 package engine
 
 import (
+	"fmt"
 	"go/ast"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -97,6 +99,42 @@ func getValueFromTag(field *ast.Field, k string) string {
 	return tag.Get(k) // read the desc tag directly
 }
 
+// paramLocations are the places a @param can say a parameter is in.
+var paramLocations = []string{"query", "header", "path", "cookie"}
+
+// paramForm is a @param annotation that is well formed.
+type paramForm struct {
+	in, name, typ, description string
+	required                   bool
+}
+
+// parseParamForm reads a line "@param:<in> <name> <type> <required|optional>
+// [\"description\"]". A line that is not a @param annotation gives ok false and no
+// problem; one that is, and is not well formed, gives the problem.
+func parseParamForm(line string) (form paramForm, problem string, ok bool) {
+	rest, isParam := strings.CutPrefix(strings.TrimSpace(line), "@param:")
+	if !isParam {
+		return form, "", false
+	}
+	head, quoted, hasDescription := strings.Cut(rest, `"`)
+	words := strings.Fields(head)
+	switch {
+	case len(words) < 4:
+		return form, "it needs <in> <name> <type> required|optional, and a description in double quotes if there is one", false
+	case len(words) > 4:
+		return form, "the description goes in double quotes, after required|optional", false
+	case !slices.Contains(paramLocations, words[0]):
+		return form, fmt.Sprintf("%q is not a place for a parameter to be in: it is query, header, path or cookie", words[0]), false
+	case words[3] != "required" && words[3] != "optional":
+		return form, fmt.Sprintf("the fourth word is required or optional, not %q", words[3]), false
+	}
+	form = paramForm{in: words[0], name: words[1], typ: words[2], required: words[3] == "required"}
+	if hasDescription {
+		form.description = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(quoted), `"`))
+	}
+	return form, "", true
+}
+
 // parseParamComment parses the @param annotation of a parameter, which is
 // "@param:<in> <name> <type> <required> [\"<description>\"]". The parameter is
 // found by its name or, as an int, by its position.
@@ -112,51 +150,25 @@ func (m *Method) parseParamComment(doc string, identifier interface{}) *ParamSpe
 		return nil
 	}
 
-	lines := strings.Split(doc, "\n")
-	for _, line := range lines {
-		if !strings.HasPrefix(line, "@param:") {
+	for _, line := range strings.Split(doc, "\n") {
+		form, _, ok := parseParamForm(line)
+		if !ok || form.name != target {
 			continue
 		}
-
-		// @param:<in> <name> <type> <required> ["<description>"]
-		parts := splitParamAnnotation(line)
-		if parts == nil || parts[1] != target {
-			continue
-		}
-
-		description := ""
-		if len(parts) == 5 {
-			description = strings.Trim(parts[4], `"`)
-		}
-		types := m.parseStringType(parts[2])
+		types := m.parseStringType(form.typ)
 		if len(types) == 0 {
 			continue
 		}
 		return &ParamSpec{
-			In:    parts[0],
-			Name:  parts[1],
+			In:    form.in,
+			Name:  form.name,
 			Types: types,
 			// A parameter of the path is part of the route: it is always there.
-			Required:    parts[3] == "required" || parts[0] == "path",
-			Description: description,
+			Required:    form.required || form.in == "path",
+			Description: form.description,
 		}
 	}
 	return nil
-}
-
-// splitParamAnnotation splits a line "@param:<in> <name> <type> <required>
-// [\"description\"]" into its parts; a line that is not such an annotation (it
-// is prose, or it is short of parts) gives nil.
-func splitParamAnnotation(line string) []string {
-	rest, ok := strings.CutPrefix(line, "@param:")
-	if !ok {
-		return nil
-	}
-	parts := strings.SplitN(strings.TrimSpace(rest), " ", 5)
-	if len(parts) < 4 {
-		return nil
-	}
-	return parts
 }
 
 // paramAnnotationNames lists the names the @param annotations of a doc comment
@@ -164,8 +176,8 @@ func splitParamAnnotation(line string) []string {
 func paramAnnotationNames(doc string) []string {
 	var names []string
 	for _, line := range strings.Split(doc, "\n") {
-		if parts := splitParamAnnotation(line); parts != nil {
-			names = append(names, parts[1])
+		if form, _, ok := parseParamForm(line); ok {
+			names = append(names, form.name)
 		}
 	}
 	return names

@@ -40,10 +40,10 @@ func TestEnumValuesAreWhatTheCompilerComputes(t *testing.T) {
 	assert.Equal(t, []string{"AliasA=a"}, enumValues(collectEnumEntries(pkg, "Alias")))
 }
 
-// legacy_schema_shapes keeps what documents generated before the fix have: the
+// legacy_output keeps what documents generated before the fix have: the
 // constants declared with the type and a literal, and an empty value for the rest.
 func TestEnumValuesOfLegacyDocuments(t *testing.T) {
-	withSettings(t, Settings{CompatLegacySchemaShapes: true}, "github.com/Danceiny/docgen")
+	withSettings(t, Settings{CompatLegacyOutput: true}, "github.com/Danceiny/docgen")
 	pkg := loadFixture(t, "testdata/enums")
 
 	assert.Equal(t, []string{"Low="}, enumValues(collectEnumEntries(pkg, "Priority")), "only the first, and its iota is no literal")
@@ -53,7 +53,7 @@ func TestEnumValuesOfLegacyDocuments(t *testing.T) {
 
 // A configuration that gives a type its schema has given it, an enum too: a type
 // whose JSON is its name and not its number says so in type_map. A configuration
-// that keeps legacy_schema_shapes has always had the enum win.
+// that keeps legacy_output has always had the enum win.
 func TestTypeMapGivesAnEnumItsSchema(t *testing.T) {
 	const key = "github.com.Danceiny.docgen.internal.engine.testdata.enums.Priority"
 	byName := map[string]*openapi3.Schema{key: {Type: &openapi3.Types{"string"}, Description: "the name of the priority"}}
@@ -67,7 +67,7 @@ func TestTypeMapGivesAnEnumItsSchema(t *testing.T) {
 		{"legacy", true, "integer"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			withSettings(t, Settings{TypeMap: byName, CompatLegacySchemaShapes: tc.legacy}, "github.com/Danceiny/docgen")
+			withSettings(t, Settings{TypeMap: byName, CompatLegacyOutput: tc.legacy}, "github.com/Danceiny/docgen")
 			pkg := loadFixture(t, "testdata/enums")
 			doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "enums", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
 			defers, mergeTasks := processModelsFor(pkg, doc, testInternal)

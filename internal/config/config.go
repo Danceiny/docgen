@@ -77,7 +77,8 @@ type Compat struct {
 	// of one has no content) and which request.runtime_only can name as
 	// "unknown".
 	LegacyOperationTypes bool `yaml:"legacy_operation_types"`
-	// LegacySchemaShapes builds schemas as documents always built them: a name
+	// LegacyOutput builds documents as they were always built, whatever else
+	// docgen fixed: in the schemas, a name
 	// that is repeated in a declaration (Lat, Lng float64) is the first name only,
 	// a field embedded under a json name (Base `json:"base"`) is flattened into
 	// the struct although encoding/json nests it, a field is required when its
@@ -91,9 +92,10 @@ type Compat struct {
 	// description, the comment of a field is copied onto the elements of its list
 	// and, depending on the order the types are declared in, the type is copied into
 	// the field or the comment is lost, a public document writes the types that
-	// fields use in place of references, and an example or a default that the type
-	// of the field does not allow stops the run.
-	LegacySchemaShapes bool `yaml:"legacy_schema_shapes"`
+	// fields use in place of references, an example or a default that the type of
+	// the field does not allow stops the run, and an operation whose comment starts
+	// with an annotation has that line as its summary.
+	LegacyOutput bool `yaml:"legacy_output"`
 }
 
 // Doc describes one generated document.

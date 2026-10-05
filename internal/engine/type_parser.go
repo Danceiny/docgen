@@ -146,7 +146,7 @@ func (p *TypeParser) parseTypeSpecOccupied(typeSpec *ast.TypeSpec, ctx *ParseCon
 	case *ast.StructType:
 		underlyingType = "StructType"
 		schema = p.parseStruct(t, ctx)
-		if !settings.CompatLegacySchemaShapes && schema != nil && schema.Value != nil && schema.Value.Description == "" {
+		if !settings.CompatLegacyOutput && schema != nil && schema.Value != nil && schema.Value.Description == "" {
 			schema.Value.Description = extractDescription(ctx.Doc, ctx.Comment)
 		}
 	case *ast.Ident:
@@ -186,7 +186,7 @@ func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.S
 	}
 	defer func() {
 		if schema != nil && schema.Value != nil && ctx != nil {
-			if settings.CompatLegacySchemaShapes || schema.Ref == "" {
+			if settings.CompatLegacyOutput || schema.Ref == "" {
 				// nullability only matters in the context of a field
 				schema.Value.Nullable = isNullableFromField(ctx.Field)
 				schema.Value.Description = extractDescription(ctx.Doc, ctx.Comment)

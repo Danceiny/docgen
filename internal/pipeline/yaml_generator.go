@@ -46,7 +46,7 @@ func generatePublicYAML(doc *openapi3.T, outputPath string, genericTitles, force
 	// then the paths: keep only the operations that have the public tag
 	filterPublicPaths(doc, public.tag)
 
-	if !legacySchemaShapes {
+	if !legacyOutput {
 		// Documents were always written with the schemas that fields use copied
 		// into place, because the titles that say which component a copy is of
 		// were made short before anything looked at them. The references are made
@@ -394,13 +394,13 @@ func slimChild(doc *openapi3.T, child *openapi3.SchemaRef, visited map[string]bo
 		return &openapi3.SchemaRef{Ref: ref}
 	}
 	expanded := processSchemaRef(doc, child)
-	if !legacySchemaShapes && expanded != nil && expanded.Ref != "" {
+	if !legacyOutput && expanded != nil && expanded.Ref != "" {
 		// A reference is written as one: what it refers to is a component, which is
 		// slimmed on its own turn. Going down into it again for every path that leads
 		// to it makes the walk as long as the number of paths, which is what a graph
 		// of types that share types has far more of than types. (Documents that were
 		// generated before depend on where the walk cut the cycles it met on the
-		// way, so a configuration that keeps legacy_schema_shapes keeps the walk.)
+		// way, so a configuration that keeps legacy_output keeps the walk.)
 		return expanded
 	}
 	if ref != "" && expanded != nil && expanded.Ref == "" {
@@ -455,7 +455,7 @@ func slimPropertiesWithVisited(doc *openapi3.T, rootRef *openapi3.SchemaRef, vis
 
 	// the values of a map; documents generated before they were written are
 	// left as they were
-	if !legacySchemaShapes && root.AdditionalProperties.Schema != nil {
+	if !legacyOutput && root.AdditionalProperties.Schema != nil {
 		root.AdditionalProperties.Schema = slimChild(doc, root.AdditionalProperties.Schema, visited)
 	}
 

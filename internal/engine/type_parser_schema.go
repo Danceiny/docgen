@@ -10,7 +10,7 @@ import (
 )
 
 func (p *TypeParser) handleSchema(typeSpec *ast.TypeSpec, fullKey string, schema *openapi3.SchemaRef, underlyingType string, ctx *ParseContext) {
-	if !settings.CompatLegacySchemaShapes {
+	if !settings.CompatLegacyOutput {
 		// What the type is made of is what the compiler says, not what the
 		// declaration happens to call it: byte and uint8 are the same, and a type
 		// declared as another type of the module is made of what that is made of.
@@ -21,11 +21,11 @@ func (p *TypeParser) handleSchema(typeSpec *ast.TypeSpec, fullKey string, schema
 	// should the enum be hidden?
 	if shouldHideType(p.pkg, typeSpec, p.audience) {
 		schema = generateHiddenSchema(underlyingType)
-	} else if isEnumType(p.pkg, typeSpec) && (settings.CompatLegacySchemaShapes || settings.TypeMap[fullKey] == nil) {
+	} else if isEnumType(p.pkg, typeSpec) && (settings.CompatLegacyOutput || settings.TypeMap[fullKey] == nil) {
 		// make the enum schema with visibility control; a schema that the
 		// configuration gives the type (type_map) is the one it has, as for any other type
 		schema = generateEnumSchemaWithVisibility(p.pkg, typeSpec, underlyingType, p.audience)
-		if desc := extractDescription(ctx.Doc, ctx.Comment); desc != "" && !settings.CompatLegacySchemaShapes && schema.Value != nil {
+		if desc := extractDescription(ctx.Doc, ctx.Comment); desc != "" && !settings.CompatLegacyOutput && schema.Value != nil {
 			// what the type is, then what its values are
 			schema.Value.Description = desc + "\n\n" + schema.Value.Description
 		}

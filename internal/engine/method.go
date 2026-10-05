@@ -29,6 +29,18 @@ type Method struct {
 	Hidden bool
 }
 
+// warnAboutMalformedParams says so for each @param annotation that is not well
+// formed: it describes nothing, and the parameter it was meant for is read as a
+// JSON body without a word.
+func (m *Method) warnAboutMalformedParams() {
+	for _, line := range strings.Split(m.Doc, "\n") {
+		if _, problem, ok := parseParamForm(line); problem != "" && !ok {
+			warnAt("a @param annotation is not well formed, so it is ignored: "+problem,
+				"annotation", strings.TrimSpace(line), "method", m.Name, "at", m.Pos)
+		}
+	}
+}
+
 // warnUnmatchedParamAnnotations says so when a @param annotation names a
 // parameter that the method does not have: it describes nothing, and the
 // parameter it was meant for is read as a JSON body.

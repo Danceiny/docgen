@@ -192,7 +192,7 @@ keep_empty_tags: false          # 保留没有 @tags 的接口上的空 tag
 
 compat:                         # 仅用于旧工具生成的文档，
   legacy_operation_types: false #   见“此前生成的文档”
-  legacy_schema_shapes: false
+  legacy_output: false
 
 type_map:                       # 直接指定某个类型的 schema，不去读它
   example.com.shop.types.ID: {type: string, description: id}
@@ -332,19 +332,25 @@ docgen 是从一个大型服务的文档生成工具里抽出来的，那些文�
 ```yaml
 compat:
   legacy_operation_types: true
-  legacy_schema_shapes: true
+  legacy_output: true
 ```
 
 - `legacy_operation_types`：接口的参数和返回值类型按旧方式读取：列表就是它的元素类型（`[]Pet` 是 `Pet`），
   map、接口和实例化的泛型类型是未知类型，所以它们作为返回值时没有 content。
-- `legacy_schema_shapes`：一次声明多个名字（`Lat, Lng float64`）只有第一个是字段，空白字段是名为 `_` 的属性；
-  带 json 名字的内嵌 struct 被展开；`validate:"required,email"` 不会让字段必填，只有 `validate:"required"` 才会；
-  `any` 是 `object`，`interface{}` 是字符串、整数或对象；枚举的值是用该类型和字面量声明的常量，
-  所以 `iota` 和表达式给出空值，隐式重复类型的常量缺失；map 的值类型丢失（`additionalProperties: true`）；
-  字节切片是字符串数组，byte 是字符串；枚举类型在 `type_map` 里的条目被忽略；类型的注释不是它的描述；
-  字段的注释会被复制到它的列表的元素上；有注释的字段，若其类型声明在所在 struct 之后，会被替换成该类型的副本，
-  声明在之前则是丢了注释的 `$ref`；公开文档把字段所用的类型就地展开而不是引用，所以它随到某个类型的路径数增长，
-  而不是随类型数增长；example 和 default tag 按字段的 Go 类型读取，类型不允许的值会让运行失败。
+- `legacy_output`：docgen 修正的、会改变文档的其他一切。schema 方面的错误：
+  - 一次声明多个名字（`Lat, Lng float64`）只有第一个是字段，空白字段是名为 `_` 的属性；
+  - 带 json 名字的内嵌 struct 被展开；
+  - `validate:"required,email"` 不会让字段必填，只有 `validate:"required"` 才会；
+  - `any` 是 `object`，`interface{}` 是字符串、整数或对象；
+  - 枚举的值是用该类型和字面量声明的常量，所以 `iota` 和表达式给出空值，隐式重复类型的常量缺失，
+    枚举类型在 `type_map` 里的条目被忽略；
+  - map 的值类型丢失（`additionalProperties: true`），字节切片是字符串数组，byte 是字符串；
+  - 类型的注释不是它的描述，字段的注释会被复制到它的列表的元素上；有注释的字段，若其类型声明在所在 struct 之后，
+    会被替换成该类型的副本，声明在之前则是丢了注释的 `$ref`；
+  - example 和 default tag 按字段的 Go 类型读取，类型不允许的值会让运行失败。
+
+  文档方面的错误：公开文档把字段所用的类型就地展开而不是引用，所以它随到某个类型的路径数增长，而不是随类型数增长；
+  注释以注解开头的接口，其 summary 就是那一行注解。
 
 ## 已知限制
 

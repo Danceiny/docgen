@@ -29,6 +29,7 @@ func (m *Method) parseParams(params *ast.FieldList) {
 	if isContextType(params.List[0].Type) {
 		startIndex = 1
 	}
+	m.warnAboutMalformedParams()
 	m.warnUnmatchedParamAnnotations(params.List[startIndex:])
 
 	// go through all parameters (including the request body)
@@ -598,7 +599,7 @@ func isRequiredField(field *ast.Field) bool {
 		return true
 	}
 	validate, binding := getValueFromTag(field, "validate"), getValueFromTag(field, "binding")
-	if settings.CompatLegacySchemaShapes {
+	if settings.CompatLegacyOutput {
 		return validate == "required" || binding == "required"
 	}
 	return hasRule(validate, "required") || hasRule(binding, "required")

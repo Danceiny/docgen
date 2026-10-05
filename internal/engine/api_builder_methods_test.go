@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // @method lists the HTTP methods of an operation, separated by commas; a space
@@ -101,4 +103,27 @@ func TestTwoMethodsOnOneRouteAndVerbAreReported(t *testing.T) {
 	if !reported {
 		t.Error("the collision is not reported")
 	}
+}
+
+// The refusal of the document says only that a path parameter is missing; the
+// warning says what to add, and for which of the two it is.
+func TestARouteAndItsPathParametersAreSaidToDisagree(t *testing.T) {
+	logs := captureLogs(t)
+	op := &openapi3.Operation{Parameters: openapi3.Parameters{{Value: openapi3.NewPathParameter("other")}}}
+	warnAboutPathParameters(&Method{Name: "ByID", APIPath: "/api/s/byId/{id}", Pos: "s.go:1"}, op)
+
+	var messages []string
+	for _, rec := range logs.records {
+		messages = append(messages, rec.Message)
+	}
+	require.Len(t, messages, 2)
+	assert.Contains(t, messages[0], "{id}")
+	assert.Contains(t, messages[0], "@param:path id")
+	assert.Contains(t, messages[1], "path parameter other")
+	assert.Contains(t, messages[1], "{other}")
+
+	logs.records = nil
+	op = &openapi3.Operation{Parameters: openapi3.Parameters{{Value: openapi3.NewPathParameter("id")}}}
+	warnAboutPathParameters(&Method{Name: "ByID", APIPath: "/api/s/byId/{id}"}, op)
+	assert.Empty(t, logs.records, "a route and its parameters that agree say nothing")
 }

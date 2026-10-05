@@ -357,8 +357,8 @@ func TestTheValuesOfAMapAreDescribed(t *testing.T) {
 	}
 }
 
-// compat.legacy_schema_shapes keeps the documents that were generated before.
-func TestLegacySchemaShapesKeepTheMapsAsTheyWere(t *testing.T) {
+// compat.legacy_output keeps the documents that were generated before.
+func TestLegacyOutputKeepTheMapsAsTheyWere(t *testing.T) {
 	doc := generateFixtureWith(t, "testdata/maps", "docgen-legacy.yaml", "internal")
 	props := doc.Components.Schemas[mapsPrefix+"Pet"].Value.Properties
 
@@ -430,9 +430,9 @@ func TestWhatAFieldSaysAboutItselfIsWrittenWithTheField(t *testing.T) {
 	}
 }
 
-// compat.legacy_schema_shapes keeps documents the way they were: a comment on a field
+// compat.legacy_output keeps documents the way they were: a comment on a field
 // of a type that is declared after the struct copies the type into the field.
-func TestLegacySchemaShapesKeepTheCommentsAsTheyWere(t *testing.T) {
+func TestLegacyOutputKeepTheCommentsAsTheyWere(t *testing.T) {
 	doc := generateFixtureWith(t, "testdata/comments", "docgen-legacy.yaml", "internal")
 	props := doc.Components.Schemas[commentsPrefix+"Pet"].Value.Properties
 

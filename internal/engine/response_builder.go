@@ -124,7 +124,7 @@ func getBasicTypeSchema(name string) *openapi3.Schema {
 	if s := settings.TypeMap[name]; s != nil {
 		return s
 	}
-	if !settings.CompatLegacySchemaShapes {
+	if !settings.CompatLegacyOutput {
 		switch name {
 		case "any":
 			return anySchema()

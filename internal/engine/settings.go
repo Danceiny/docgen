@@ -69,13 +69,13 @@ type Settings struct {
 	// an operation as documents always read them: a list is its element type, and
 	// a map, an interface and an instantiated generic type are unknown.
 	CompatLegacyOperationTypes bool
-	// CompatLegacySchemaShapes builds schemas as documents always built them: the
+	// CompatLegacyOutput builds schemas as documents always built them: the
 	// first name of a declaration with several, an embedded field that has a json
 	// name flattened, "required" only as the whole of a validate or binding tag,
 	// any as an object and interface{} as one of a string, an integer and an
 	// object, the values of an enum from the literals of its constants, and an
 	// enum as what its constants make it even when type_map gives its schema.
-	CompatLegacySchemaShapes bool
+	CompatLegacyOutput bool
 	// KeepEmptyTags keeps the empty tags an operation gets from a missing @tags
 	// or @permission; without it they are dropped.
 	KeepEmptyTags bool

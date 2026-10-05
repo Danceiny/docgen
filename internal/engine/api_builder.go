@@ -1,7 +1,11 @@
 package engine
 
 import (
+	"fmt"
+	"maps"
 	"net/http"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -47,6 +51,7 @@ func BuildPathItem(doc *openapi3.T, service ServiceInterface, method *Method) {
 	}
 
 	operation := buildOperation(method, doc)
+	warnAboutPathParameters(method, operation)
 	for _, verb := range verbs {
 		op := operation
 		if len(verbs) > 1 {
@@ -94,7 +99,8 @@ func buildOperation(method *Method, doc *openapi3.T) *openapi3.Operation {
 	tags = dedupe(tags)
 	sort.Strings(tags)
 	firstLineDoc := strings.Split(method.Doc, "\n")
-	if firstLineDoc[0] == "" {
+	if firstLineDoc[0] == "" || (!settings.CompatLegacyOutput && strings.HasPrefix(strings.TrimSpace(firstLineDoc[0]), "@")) {
+		// A comment that starts with an annotation has no sentence to summarize with.
 		firstLineDoc = []string{method.Name}
 	}
 	op := &openapi3.Operation{
@@ -177,4 +183,35 @@ func isWordSeparator(r rune) bool {
 		return false
 	}
 	return unicode.IsSpace(r)
+}
+
+// pathTemplateName is a {name} in a route.
+var pathTemplateName = regexp.MustCompile(`\{([^{}]+)\}`)
+
+// warnAboutPathParameters says what to add when the {names} of a route and the
+// path parameters of its operation are not the same: OpenAPI wants each to be the
+// other, and the error the document is refused with says only that one is missing.
+func warnAboutPathParameters(method *Method, op *openapi3.Operation) {
+	inRoute := map[string]bool{}
+	for _, m := range pathTemplateName.FindAllStringSubmatch(method.APIPath, -1) {
+		inRoute[m[1]] = true
+	}
+	described := map[string]bool{}
+	for _, p := range op.Parameters {
+		if p.Value != nil && p.Value.In == openapi3.ParameterInPath {
+			described[p.Value.Name] = true
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(inRoute)) {
+		if !described[name] {
+			warnAt(fmt.Sprintf("the route has {%s} and the method has no path parameter of that name: add `@param:path %s <type> required` to its comment, with a Go parameter called %s", name, name, name),
+				"route", method.APIPath, "method", method.Name, "at", method.Pos)
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(described)) {
+		if !inRoute[name] {
+			warnAt(fmt.Sprintf("the method has the path parameter %s and its route has no {%s}: add it to the @path, as /x/{%s}", name, name, name),
+				"route", method.APIPath, "method", method.Name, "at", method.Pos)
+		}
+	}
 }

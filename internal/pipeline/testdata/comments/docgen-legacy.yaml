@@ -2,7 +2,7 @@
 # belong have always read it.
 version: 1
 compat:
-  legacy_schema_shapes: true
+  legacy_output: true
 docs:
   - name: internal
     audience: internal

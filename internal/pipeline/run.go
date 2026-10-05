@@ -21,9 +21,9 @@ import (
 // otherwise. A run generates one configuration at a time.
 var rootDir, outDir string
 
-// legacySchemaShapes is compat.legacy_schema_shapes of the configuration being
+// legacyOutput is compat.legacy_output of the configuration being
 // run.
-var legacySchemaShapes bool
+var legacyOutput bool
 
 // Options selects what Run generates.
 type Options struct {
@@ -51,7 +51,7 @@ func Run(opts Options) error {
 		return err
 	}
 	rootDir, outDir = opts.Dir, opts.Dir
-	legacySchemaShapes = opts.Config.Compat.LegacySchemaShapes
+	legacyOutput = opts.Config.Compat.LegacyOutput
 	if opts.OutputDir != "" {
 		outDir = opts.OutputDir
 	}

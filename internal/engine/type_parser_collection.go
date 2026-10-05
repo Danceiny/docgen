@@ -33,7 +33,7 @@ func (p *TypeParser) parseMap(expr *ast.MapType, ctx *ParseContext) *openapi3.Sc
 		valueSchema = defaultSchemaRef()
 	}
 	additional := additionalPropertiesOf(valueSchema)
-	if settings.CompatLegacySchemaShapes {
+	if settings.CompatLegacyOutput {
 		// kin-openapi writes the flag and not the schema when both are set, which
 		// is how documents always lost the type of the values of a map.
 		additional = openapi3.AdditionalProperties{Has: boolPtr(true), Schema: valueSchema}
@@ -77,7 +77,7 @@ func isAnyValue(ref *openapi3.SchemaRef) bool {
 func boolPtr(v bool) *bool { return &v }
 
 func (p *TypeParser) parseArray(expr *ast.ArrayType, ctx *ParseContext) *openapi3.SchemaRef {
-	if !settings.CompatLegacySchemaShapes && p.isByteSlice(expr) {
+	if !settings.CompatLegacyOutput && p.isByteSlice(expr) {
 		// encoding/json writes a slice of bytes as a base64 string.
 		return &openapi3.SchemaRef{Value: &openapi3.Schema{
 			Type:     &openapi3.Types{openapi3.TypeString},
@@ -86,7 +86,7 @@ func (p *TypeParser) parseArray(expr *ast.ArrayType, ctx *ParseContext) *openapi
 		}}
 	}
 	ctx2 := *ctx
-	if !settings.CompatLegacySchemaShapes {
+	if !settings.CompatLegacyOutput {
 		// The comment and the tags of a field are those of the list, not of what
 		// it is a list of.
 		ctx2.Doc, ctx2.Comment, ctx2.Field = nil, nil, nil
@@ -133,7 +133,7 @@ func (p *TypeParser) parseArray(expr *ast.ArrayType, ctx *ParseContext) *openapi
 func (p *TypeParser) parseInterface(expr *ast.InterfaceType, ctx *ParseContext) *openapi3.SchemaRef {
 	// the empty interface, interface{}
 	if expr.Methods == nil || len(expr.Methods.List) == 0 {
-		if !settings.CompatLegacySchemaShapes {
+		if !settings.CompatLegacyOutput {
 			empty := anySchema()
 			if settings.VendorExtensions {
 				empty.Extensions = map[string]interface{}{"x-go-interface": "interface{}"}
