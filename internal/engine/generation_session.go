@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -15,13 +16,25 @@ import (
 // document. Keeping the graph here makes model and API generation share one
 // packages.Load result while keeping AST-backed state bounded by the session.
 type GenerationSession struct {
-	moduleDir string
-	packages  []*packages.Package
-	imports   map[string]*packages.Package
-	resolving map[string]bool
-	hidden    map[string]bool // the keys of the types of the module that the document hides
-	audience  Audience
-	mu        sync.Mutex
+	moduleDir  string
+	packages   []*packages.Package
+	imports    map[string]*packages.Package
+	resolving  map[string]bool
+	hidden     map[string]bool // the keys of the types of the module that the document hides
+	audience   Audience
+	mu         sync.Mutex
+	valueCheck *valueChecker // for the document of the session, made when a field needs it
+}
+
+// checkerOf is the checker of the values of the tags of the fields of the
+// document, one for all the packages of the session.
+func (s *GenerationSession) checkerOf(doc *openapi3.T) *valueChecker {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.valueCheck == nil || s.valueCheck.doc != doc {
+		s.valueCheck = newValueChecker(doc)
+	}
+	return s.valueCheck
 }
 
 // SessionOption configures a GenerationSession.

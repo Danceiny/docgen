@@ -25,9 +25,12 @@ type TypeParser struct {
 	session  *GenerationSession
 	audience Audience
 
-	schemaMu    sync.RWMutex // protects the writes to doc
-	defers      *list.List
+	schemaMu sync.RWMutex // protects the writes to doc
+	defers   *list.List
+	// mergeTasks are the MergeTasks, to run until they change nothing, and then the
+	// FinalTasks, in the order they were made.
 	mergeTasks  *list.List
+	valueCheck  *valueChecker // for a parser that has no session
 	activeTypes map[string]bool
 	activeMu    sync.Mutex
 	// embedding holds the structs whose field names are being collected.
@@ -38,6 +41,10 @@ type MergeTask struct {
 	TargetKey string
 	SourceKey string
 }
+
+// FinalTask is what is left to do once every type is described and the fields of
+// the structs that are embedded have been passed on to those that embed them.
+type FinalTask func()
 
 func NewTypeParser(pkg *packages.Package, doc *openapi3.T, sessions ...*GenerationSession) *TypeParser {
 	var session *GenerationSession

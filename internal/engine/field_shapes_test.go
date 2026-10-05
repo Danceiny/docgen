@@ -306,3 +306,49 @@ func TestAPointerToATypeWithNoSchemaIsLeftOut(t *testing.T) {
 	}
 	assert.True(t, warned, "it is said that complex64 has no schema")
 }
+
+// A field whose type is declared further down the package than the field has the
+// example and the default of its tags judged by that type, as one whose type is
+// declared above it: what the field refers to is looked up when every type is
+// described, and not taken from the placeholder the type was when the field was
+// read. The struct that a type embeds, declared further down still, has been
+// passed on by then.
+func TestExamplesOfFieldsWhoseTypesAreDeclaredLaterAreJudgedByThoseTypes(t *testing.T) {
+	logs := captureLogs(t)
+	withSettings(t, Settings{}, "github.com/Danceiny/docgen")
+	pkg := loadFixture(t, "testdata/laterdecl")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "later", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+
+	props := doc.Components.Schemas["github.com.Danceiny.docgen.internal.engine.testdata.laterdecl.Order"].Value.Properties
+	assert.Equal(t, "active", props["status"].Value.Example)
+	assert.Equal(t, "new", props["status"].Value.Default)
+	assert.EqualValues(t, int64(2), props["level"].Value.Example, "a number of an enum of numbers")
+	assert.True(t, props["level"].Value.Type.Is("integer"), "and the nullable reference has the type of the enum")
+	assert.Equal(t, map[string]any{"city": "Dubai"}, props["addr"].Value.Example)
+	assert.Equal(t, []any{"active"}, props["tags"].Value.Example, "the items of a list are judged by their type")
+	assert.Equal(t, map[string]any{"a": "new"}, props["byKey"].Value.Example, "so are the values of a map")
+	assert.Equal(t, "active", props["derived"].Value.Example, "a type declared as another type has what that one allows")
+	assert.Equal(t, map[string]any{"id": "x"}, props["child"].Value.Example)
+
+	for _, name := range []string{"bad", "badAddr", "noCity", "badChild"} {
+		assert.NotEmpty(t, props[name].Ref, "%s says nothing of itself but the type it has, so it is the reference", name)
+		assert.Nil(t, props[name].Value.Example, name)
+	}
+	assert.Nil(t, props["badTags"].Value.Example)
+	rejected := map[string]string{}
+	for _, rec := range logs.records {
+		if rec.Level == slog.LevelWarn {
+			attrs := attrsOf(rec)
+			rejected[attrs["field"]] = attrs["value"]
+		}
+	}
+	assert.Equal(t, map[string]string{
+		"bad":      "bogus",
+		"badAddr":  `{"city":1}`,
+		"noCity":   "{}",
+		"badTags":  `["bogus"]`,
+		"badChild": `{"name":"n"}`,
+	}, rejected, "and each is said, with the field")
+}

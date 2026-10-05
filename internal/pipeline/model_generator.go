@@ -135,15 +135,24 @@ func trimFieldOrders(doc *openapi3.T) {
 // again until no pass adds one, so that fields are passed along embedding of any
 // depth, whatever order the tasks are in. Every pass that changes something adds
 // a property or a required field to a finite set, so the loop ends, cycles of
-// embedding included.
-func runMergeTasks(doc *openapi3.T, mergeTasks *list.List) {
+// embedding included. The final tasks follow, in the order they were made: they
+// need every type described and every field passed on.
+func runMergeTasks(doc *openapi3.T, tasks *list.List) {
 	for changed := true; changed; {
 		changed = false
-		for v := mergeTasks.Front(); v != nil; v = v.Next() {
-			task := v.Value.(engine.MergeTask)
+		for v := tasks.Front(); v != nil; v = v.Next() {
+			task, ok := v.Value.(engine.MergeTask)
+			if !ok {
+				continue
+			}
 			if mergeProperties(doc, task.TargetKey, task.SourceKey) {
 				changed = true
 			}
+		}
+	}
+	for v := tasks.Front(); v != nil; v = v.Next() {
+		if final, ok := v.Value.(engine.FinalTask); ok {
+			final()
 		}
 	}
 }
@@ -176,7 +185,18 @@ func mergeProperties(doc *openapi3.T, targetKey, sourceKey string) bool {
 	// Merge required fields
 	if len(source.Required) > 0 {
 		oldLen := len(target.Required)
-		merged := dedupe(append(append([]string{}, target.Required...), source.Required...))
+		inherited := source.Required
+		if !legacyOutput {
+			// A field of the struct itself shadows one of the same name that it
+			// embeds, and it is that one that is required or not.
+			inherited = nil
+			for _, name := range source.Required {
+				if property := source.Properties[name]; property != nil && target.Properties[name] == property {
+					inherited = append(inherited, name)
+				}
+			}
+		}
+		merged := dedupe(append(append([]string{}, target.Required...), inherited...))
 		if len(merged) != oldLen {
 			changed = true
 		}

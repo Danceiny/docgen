@@ -113,7 +113,7 @@ func TestAnInvalidSchemaIsStillRefusedWhenReferencesAreCut(t *testing.T) {
 	for name, build := range map[string]func(*openapi3.Schema){
 		"declared": func(s *openapi3.Schema) {},
 		"in a property": func(s *openapi3.Schema) {
-			s.Properties["inner"] = &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"integer"}, Default: "not a number"}}
+			s.Properties["inner"] = &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"array"}}}
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -121,8 +121,7 @@ func TestAnInvalidSchemaIsStillRefusedWhenReferencesAreCut(t *testing.T) {
 			owner := openapi3.NewObjectSchema()
 			owner.Properties["other"] = &openapi3.SchemaRef{Ref: "#/components/schemas/Other"}
 			if name == "declared" {
-				owner.Type = &openapi3.Types{"integer"}
-				owner.Default = "not a number"
+				owner.Type = &openapi3.Types{"array"} // a list that has no items
 			}
 			build(owner)
 			doc := &openapi3.T{
@@ -134,8 +133,8 @@ func TestAnInvalidSchemaIsStillRefusedWhenReferencesAreCut(t *testing.T) {
 					"Other": other.NewRef(),
 				}},
 			}
-			if _, err := GenerateYAML(doc, nil); err == nil || !strings.Contains(err.Error(), "invalid default") {
-				t.Fatalf("a schema with a default its type does not allow was accepted: %v", err)
+			if _, err := GenerateYAML(doc, nil); err == nil || !strings.Contains(err.Error(), "items") {
+				t.Fatalf("a list that has no items was accepted: %v", err)
 			}
 		})
 	}

@@ -69,7 +69,7 @@ func NewSchemaRefFromFullKey(fk string) *openapi3.SchemaRef {
 }
 
 func NewRefFromFullKey(fk string) string {
-	return "#/components/schemas/" + fk
+	return schemaRefPrefix + fk
 }
 
 func NewSchemaRef(ref string) *openapi3.SchemaRef {

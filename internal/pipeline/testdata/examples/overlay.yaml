@@ -1,0 +1,6 @@
+version: 1
+schemas:
+  example.com.examples.m.Address:
+    type: object
+    properties:
+      street: {type: integer}

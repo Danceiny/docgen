@@ -226,13 +226,21 @@ func runProcessModelsTasks(t *testing.T, defers, mergeTasks *list.List, doc *ope
 	for i := 0; i < 10; i++ {
 		changed := false
 		for v := mergeTasks.Front(); v != nil; v = v.Next() {
-			task := v.Value.(MergeTask)
+			task, ok := v.Value.(MergeTask)
+			if !ok {
+				continue
+			}
 			if mergeSnapshotProperties(doc, task.TargetKey, task.SourceKey) {
 				changed = true
 			}
 		}
 		if !changed {
-			return
+			break
+		}
+	}
+	for v := mergeTasks.Front(); v != nil; v = v.Next() {
+		if final, ok := v.Value.(FinalTask); ok {
+			final()
 		}
 	}
 }
@@ -256,7 +264,15 @@ func mergeSnapshotProperties(doc *openapi3.T, targetKey, sourceKey string) bool 
 			changed = true
 		}
 	}
-	return changed
+	before := len(targetRef.Value.Required)
+	for _, name := range sourceRef.Value.Required {
+		// as the pipeline does: the required fields of what is embedded that the
+		// struct does not shadow
+		if property := sourceRef.Value.Properties[name]; property != nil && targetRef.Value.Properties[name] == property {
+			targetRef.Value.Required = dedupe(append(targetRef.Value.Required, name))
+		}
+	}
+	return changed || len(targetRef.Value.Required) != before
 }
 
 // serializeSchemaSnapshot produces a deterministic JSON ledger of

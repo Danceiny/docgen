@@ -101,6 +101,9 @@ func GenerateYAML(doc *openapi3.T, genericTitles []string) ([]byte, error) {
 		return nil, fmt.Errorf("load marshaled OpenAPI document: %w", err)
 	}
 	if !legacyOutput {
+		if err := checkExamples(parsed); err != nil {
+			return nil, fmt.Errorf("check the examples of the marshaled OpenAPI document: %w", err)
+		}
 		cutReferences(parsed)
 	}
 	if err := parsed.Validate(context.Background()); err != nil {
@@ -116,9 +119,10 @@ func GenerateYAML(doc *openapi3.T, genericTitles []string) ([]byte, error) {
 // through others, and while it does it keeps the schemas it is in and looks for
 // itself among them: the work of a document of three thousand types that refer to
 // each other is longer than a minute, and most of a run. That every reference
-// names a component is checked before the document is written, and what is in
-// the example of a field that refers to an enum was checked against the enum when
-// the field was read.
+// names a component is checked before the document is written, and the example
+// and the default of every schema are checked, references followed, before the
+// references are cut (checkExamples): a value is followed as far as it goes, which
+// is a short way.
 func cutReferences(doc *openapi3.T) {
 	var cut func(ref *openapi3.SchemaRef)
 	cut = func(ref *openapi3.SchemaRef) {

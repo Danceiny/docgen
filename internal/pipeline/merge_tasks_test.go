@@ -63,6 +63,38 @@ func TestEmbeddedFieldsOfStructsThatEmbedEachOtherAreMerged(t *testing.T) {
 	}
 }
 
+// A struct that has a field of its own with the name of one it embeds is not made
+// to require it by the embedded one: the field that is required or not is its own.
+// The documents of a configuration that keeps the old way of writing do require it.
+func TestAFieldThatShadowsAnEmbeddedOneIsNotRequiredByIt(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		old := legacyOutput
+		legacyOutput = legacy
+		t.Cleanup(func() { legacyOutput = old })
+
+		base := structSchema("id", "email")
+		base.Value.Required = []string{"id", "email"}
+		outer := structSchema("id") // its own id, which is not required
+		outer.Value.Required = nil
+		doc := &openapi3.T{Components: &openapi3.Components{Schemas: openapi3.Schemas{"Base": base, "Outer": outer}}}
+		tasks := list.New()
+		tasks.PushBack(engine.MergeTask{TargetKey: "Outer", SourceKey: "Base"})
+
+		runMergeTasks(doc, tasks)
+
+		want := []string{"email"}
+		if legacy {
+			want = []string{"id", "email"}
+		}
+		if got := outer.Value.Required; !reflect.DeepEqual(got, want) {
+			t.Errorf("legacy=%v: required = %v, want %v", legacy, got, want)
+		}
+		if _, ok := outer.Value.Properties["email"]; !ok {
+			t.Errorf("legacy=%v: the field the struct did not have is merged", legacy)
+		}
+	}
+}
+
 // diamonds makes a schema of depth levels, each of which refers to the next one
 // twice, the shape of a graph of types that share types: the paths to the bottom
 // are 2^depth, the schemas depth.

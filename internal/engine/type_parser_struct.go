@@ -138,58 +138,52 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 		// set the description of the field, with care for how placeholders are updated:
 		// only set Description when the schema is not the default placeholder, so that the update of placeholders is not broken
 		if fieldSchema.Value != nil {
+			fieldType := inferReflectTypeFromAST(ft)
+			if !settings.CompatLegacyOutput {
+				// What the type of the field allows as its example is known when every
+				// type is described and the fields of embedded structs are passed on.
+				p.mergeTasks.PushBack(FinalTask(func() {
+					if !isDefaultSchema(fieldSchema.Value) {
+						p.finishField(field, jsonName, schema, fieldSchema, example, defaultVal, fieldType)
+					}
+				}))
+			}
 			p.defers.PushBack(func() {
 				// is the current schema still the default placeholder?
 				// if it is not, it has been updated, and Description can be set safely
-				if !isDefaultSchema(fieldSchema.Value) {
-					if desc := extractDescription(field.Doc, field.Comment); desc != "" {
-						fieldSchema.Value.Description = desc
-					}
-					fieldType := inferReflectTypeFromAST(ft)
-					// the full type name of the field
-					fieldTypeKey := p.generateTypeKey(ft)
-					if !settings.CompatLegacyOutput {
-						p.setExampleAndDefault(field, jsonName, fieldSchema.Value, example, defaultVal, fieldType)
-						if wrapper := fieldSchema.Value; wrapper.Nullable && wrapper.Type == nil && len(wrapper.AllOf) == 1 {
-							// OpenAPI 3.0 lets nullable have an effect next to a type only, and the
-							// type is that of what the reference refers to.
-							// A list needs its items next to the type, and says what it is
-							// through the reference; the others are one word.
-							if described := p.getRealSchemaFromDoc(strings.TrimPrefix(wrapper.AllOf[0].Ref, "#/components/schemas/")); described != nil && described.Value != nil && !described.Value.Type.Is(openapi3.TypeArray) {
-								wrapper.Type = described.Value.Type
-							}
-						}
-						if wrapper := fieldSchema.Value; len(wrapper.AllOf) == 1 && wrapper.Description == "" && !wrapper.Nullable &&
-							wrapper.Example == nil && wrapper.Default == nil && schema.Properties[jsonName] == fieldSchema {
-							// Nothing is left to say of the field: its example was one its type does
-							// not allow. It is the reference itself, as a field that says nothing is.
-							schema.Properties[jsonName] = wrapper.AllOf[0]
-						}
-						return
-					}
-					if example != "" {
-						// is the type mapped to string in BasicTypeSchemas?
-						if basicSchema := getBasicTypeSchema(fieldTypeKey); basicSchema != nil && basicSchema.Type != nil && basicSchema.Type.Is("string") {
-							// mapped to string in BasicTypeSchemas: use the string value as it is
-							fieldSchema.Value.Example = example
-						} else {
-							// otherwise use the usual type inference
-							if exampleValue := parseExampleToInterface(example, fieldType); exampleValue != nil {
-								fieldSchema.Value.Example = exampleValue
-							}
+				if isDefaultSchema(fieldSchema.Value) {
+					return
+				}
+				if desc := extractDescription(field.Doc, field.Comment); desc != "" {
+					fieldSchema.Value.Description = desc
+				}
+				if !settings.CompatLegacyOutput {
+					return
+				}
+				// the full type name of the field
+				fieldTypeKey := p.generateTypeKey(ft)
+				if example != "" {
+					// is the type mapped to string in BasicTypeSchemas?
+					if basicSchema := getBasicTypeSchema(fieldTypeKey); basicSchema != nil && basicSchema.Type != nil && basicSchema.Type.Is("string") {
+						// mapped to string in BasicTypeSchemas: use the string value as it is
+						fieldSchema.Value.Example = example
+					} else {
+						// otherwise use the usual type inference
+						if exampleValue := parseExampleToInterface(example, fieldType); exampleValue != nil {
+							fieldSchema.Value.Example = exampleValue
 						}
 					}
-					if defaultVal != "" {
+				}
+				if defaultVal != "" {
 
-						// is the type mapped to string in BasicTypeSchemas?
-						if basicSchema := getBasicTypeSchema(fieldTypeKey); basicSchema != nil && basicSchema.Type != nil && basicSchema.Type.Is("string") {
-							// mapped to string in BasicTypeSchemas: use the string value as it is
-							fieldSchema.Value.Default = defaultVal
-						} else {
-							// otherwise use the usual type inference
-							if defaultValValue := parseExampleToInterface(defaultVal, fieldType); defaultValValue != nil {
-								fieldSchema.Value.Default = defaultValValue
-							}
+					// is the type mapped to string in BasicTypeSchemas?
+					if basicSchema := getBasicTypeSchema(fieldTypeKey); basicSchema != nil && basicSchema.Type != nil && basicSchema.Type.Is("string") {
+						// mapped to string in BasicTypeSchemas: use the string value as it is
+						fieldSchema.Value.Default = defaultVal
+					} else {
+						// otherwise use the usual type inference
+						if defaultValValue := parseExampleToInterface(defaultVal, fieldType); defaultValValue != nil {
+							fieldSchema.Value.Default = defaultValValue
 						}
 					}
 				}
@@ -443,6 +437,42 @@ func (p *TypeParser) warnAboutFieldTagNobodyReads(field *ast.Field) {
 	Logger().Warn("the apidoc tag of a field has a value that is none of the scopes (-, public, internal, hidden) and that no document lists in legacy_field_tokens, so the field is hidden from every document", args...)
 }
 
+// checker is what judges the values of the tags of the fields: one for the
+// document, so that what it knows of the types is made once.
+func (p *TypeParser) checker() *valueChecker {
+	if p.session != nil {
+		return p.session.checkerOf(p.doc)
+	}
+	if p.valueCheck == nil {
+		p.valueCheck = newValueChecker(p.doc)
+	}
+	return p.valueCheck
+}
+
+// finishField gives a field what it says of itself that depends on the type it
+// has: the example and the default of its tags, the type of a nullable reference,
+// and, when nothing is left to say, the plain reference.
+func (p *TypeParser) finishField(field *ast.Field, jsonName string, schema *openapi3.Schema, fieldSchema *openapi3.SchemaRef, example, defaultVal string, fieldType reflect.Type) {
+	p.setExampleAndDefault(field, jsonName, fieldSchema.Value, example, defaultVal, fieldType)
+	if wrapper := fieldSchema.Value; wrapper.Nullable && wrapper.Type == nil && len(wrapper.AllOf) == 1 {
+		// OpenAPI 3.0 lets nullable have an effect next to a type only, and the
+		// type is that of what the reference refers to.
+		// A list needs its items next to the type, and says what it is
+		// through the reference; the others are one word.
+		if described := p.getRealSchemaFromDoc(strings.TrimPrefix(wrapper.AllOf[0].Ref, schemaRefPrefix)); described != nil && described.Value != nil && !described.Value.Type.Is(openapi3.TypeArray) {
+			wrapper.Type = described.Value.Type
+		}
+	}
+	if wrapper := fieldSchema.Value; len(wrapper.AllOf) == 1 && wrapper.Description == "" && !wrapper.Nullable &&
+		wrapper.Example == nil && wrapper.Default == nil && schema.Properties[jsonName] == fieldSchema {
+		// Nothing is left to say of the field: its example was one its type does
+		// not allow. It is the reference itself, as a field that says nothing is,
+		// for the struct and for every struct that embeds it, which hold this
+		// very reference.
+		*fieldSchema = *wrapper.AllOf[0]
+	}
+}
+
 // setExampleAndDefault gives a field the example and the default of its tags,
 // read as what the schema of the field says it is: a number for an integer, the
 // text as it is for a string, a list or an object as JSON or YAML. A value that is
@@ -450,15 +480,17 @@ func (p *TypeParser) warnAboutFieldTagNobodyReads(field *ast.Field) {
 // the tag: it would make the whole document invalid, and the error would not say
 // which field it is.
 func (p *TypeParser) setExampleAndDefault(field *ast.Field, name string, schema *openapi3.Schema, example, defaultValue string, goType reflect.Type) {
+	checker := p.checker()
+	target := checker.effective(schema)
 	set := func(tag, raw string, assign func(any)) {
 		if raw == "" {
 			return
 		}
-		value := valueOfTag(schema, raw, goType)
+		value := valueOfTag(target, raw, goType)
 		if value == nil {
 			return
 		}
-		if err := validationCopy(effectiveSchema(schema)).VisitJSON(value); err != nil {
+		if err := checker.check(target, value); err != nil {
 			warnAt("the "+tag+" tag of a field is not a value that the type of the field allows, so it is left out",
 				"field", name, "value", raw, "reason", firstLine(err.Error()), "at", p.at(field))
 			return
@@ -474,7 +506,6 @@ func valueOfTag(schema *openapi3.Schema, raw string, goType reflect.Type) any {
 	for goType != nil && goType.Kind() == reflect.Pointer {
 		goType = goType.Elem()
 	}
-	schema = effectiveSchema(schema)
 	if schema.Type.Is(openapi3.TypeString) {
 		// text is text, a duration that the configuration wrote as one included
 		return raw
@@ -540,76 +571,6 @@ func (p *TypeParser) describeReference(field *ast.Field, ref *openapi3.SchemaRef
 		Description: description,
 		Nullable:    nullable,
 	}}
-}
-
-// effectiveSchema is the schema a value of a field has to be a value of: a
-// reference that has a description of its own is the only member of an allOf, and
-// the value is a value of what it refers to.
-func effectiveSchema(schema *openapi3.Schema) *openapi3.Schema {
-	for schema.Type == nil && len(schema.AllOf) == 1 && schema.AllOf[0] != nil && schema.AllOf[0].Value != nil {
-		schema = schema.AllOf[0].Value
-	}
-	return schema
-}
-
-// validationCopy is the schema, and everything it is made of, with the enums
-// written as the numbers of a JSON document, which is what the validation of a
-// value compares with: the values of an enum of integers are integers of Go until
-// the document is written. The enum of the items of a list is one of them.
-func validationCopy(schema *openapi3.Schema) *openapi3.Schema {
-	return copyForValidation(schema, map[*openapi3.Schema]*openapi3.Schema{})
-}
-
-func copyForValidation(schema *openapi3.Schema, done map[*openapi3.Schema]*openapi3.Schema) *openapi3.Schema {
-	if schema == nil {
-		return nil
-	}
-	if copied, ok := done[schema]; ok {
-		return copied
-	}
-	c := *schema
-	done[schema] = &c
-	if len(schema.Enum) > 0 {
-		c.Enum = make([]any, len(schema.Enum))
-		for i, v := range schema.Enum {
-			switch n := v.(type) {
-			case int:
-				c.Enum[i] = float64(n)
-			case int64:
-				c.Enum[i] = float64(n)
-			case uint64:
-				c.Enum[i] = float64(n)
-			default:
-				c.Enum[i] = v
-			}
-		}
-	}
-	ref := func(r *openapi3.SchemaRef) *openapi3.SchemaRef {
-		if r == nil {
-			return nil
-		}
-		return &openapi3.SchemaRef{Ref: r.Ref, Value: copyForValidation(r.Value, done)}
-	}
-	c.Items = ref(schema.Items)
-	c.Not = ref(schema.Not)
-	if schema.AdditionalProperties.Schema != nil {
-		c.AdditionalProperties.Schema = ref(schema.AdditionalProperties.Schema)
-	}
-	if len(schema.Properties) > 0 {
-		c.Properties = make(openapi3.Schemas, len(schema.Properties))
-		for name, p := range schema.Properties {
-			c.Properties[name] = ref(p)
-		}
-	}
-	for _, of := range []struct{ from, to *openapi3.SchemaRefs }{{&schema.AllOf, &c.AllOf}, {&schema.OneOf, &c.OneOf}, {&schema.AnyOf, &c.AnyOf}} {
-		if len(*of.from) > 0 {
-			*of.to = make(openapi3.SchemaRefs, len(*of.from))
-			for i, r := range *of.from {
-				(*of.to)[i] = ref(r)
-			}
-		}
-	}
-	return &c
 }
 
 // appendNames adds names to the order of the fields of a struct. A name that is

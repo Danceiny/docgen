@@ -522,3 +522,33 @@ func TestFieldOrdersLeaveOutTheFieldsAHiddenTypeTookAway(t *testing.T) {
 	assert.Equal(t, []string{"id", "shown"}, propertyNames(&openapi3.SchemaRef{Value: order}))
 	assert.Equal(t, []any{"shown", "id"}, order.Extensions["x-apifox-orders"])
 }
+
+// The example and the default of a field are judged by the type the field has,
+// whatever order the types are declared in, and the documents that are written
+// have them.
+func TestExamplesOfFieldsAreInTheDocumentsWhateverTheOrderOfTheTypes(t *testing.T) {
+	for _, name := range []string{"internal", "public"} {
+		t.Run(name, func(t *testing.T) {
+			doc := generateFixture(t, "testdata/examples", name)
+			props := doc.Components.Schemas["example.com.examples.m.Owner"].Value.Properties
+			assert.Equal(t, "active", props["status"].Value.Example)
+			assert.Equal(t, float64(2), props["level"].Value.Example)
+			assert.Equal(t, float64(1), props["level"].Value.Default)
+			assert.Equal(t, map[string]any{"street": "Main"}, props["home"].Value.Example)
+			assert.Equal(t, map[string]any{"city": "Dubai"}, props["later"].Value.Example)
+		})
+	}
+}
+
+// A type that an overlay replaces can make the example of a field one that the
+// type no longer allows. A document with such a value is one other tools refuse,
+// so the run fails and says which schema it is.
+func TestAnExampleThatAnOverlayMadeInvalidFailsTheRun(t *testing.T) {
+	cfg, err := config.Load("testdata/examples/docgen-overlay.yaml")
+	require.NoError(t, err)
+	err = Run(Options{Dir: "testdata/examples", Config: cfg, OutputDir: t.TempDir()})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "example.com.examples.m.Owner")
+	assert.Contains(t, err.Error(), "home")
+	assert.Contains(t, err.Error(), "example")
+}
