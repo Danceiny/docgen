@@ -1,5 +1,6 @@
 {
   "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotMeta": {
+    "description": "SnapshotMeta is an embedded object for nested property coverage.",
     "properties": {
       "source": {
         "description": "Source identifies the fixture origin.",
@@ -14,6 +15,7 @@
     ]
   },
   "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotOrder": {
+    "description": "SnapshotOrder is the primary DTO locked by the ProcessModels golden.",
     "properties": {
       "amount": {
         "type": "number"
@@ -22,46 +24,10 @@
         "type": "string"
       },
       "meta": {
-        "properties": {
-          "source": {
-            "description": "Source identifies the fixture origin.",
-            "example": "fixture",
-            "type": "string"
-          }
-        },
-        "title": "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotMeta",
-        "type": "object",
-        "x-apifox-orders": [
-          "source"
-        ]
+        "$ref": "#/components/schemas/github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotMeta"
       },
       "status": {
-        "enum": [
-          "pending",
-          "done"
-        ],
-        "title": "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotStatus",
-        "type": "string",
-        "x-apifox-enum": [
-          {
-            "description": "",
-            "name": "SnapshotStatusPending",
-            "value": "pending"
-          },
-          {
-            "description": "",
-            "name": "SnapshotStatusDone",
-            "value": "done"
-          }
-        ],
-        "x-enum-comments": [
-          "",
-          ""
-        ],
-        "x-enum-varnames": [
-          "SnapshotStatusPending",
-          "SnapshotStatusDone"
-        ]
+        "$ref": "#/components/schemas/github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotStatus"
       },
       "tags": {
         "items": {
@@ -81,7 +47,7 @@
     ]
   },
   "github.com.Danceiny.docgen.internal.engine.testdata.snapshotmodels.SnapshotStatus": {
-    "description": "Enums \n- `SnapshotStatusPending` (`pending`): \n- `SnapshotStatusDone` (`done`): \n",
+    "description": "SnapshotStatus is a string alias used as a named schema component.\n\nEnums \n- `SnapshotStatusPending` (`pending`): \n- `SnapshotStatusDone` (`done`): \n",
     "enum": [
       "pending",
       "done"

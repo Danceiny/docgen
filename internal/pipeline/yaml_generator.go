@@ -46,6 +46,14 @@ func generatePublicYAML(doc *openapi3.T, outputPath string, genericTitles, force
 	// then the paths: keep only the operations that have the public tag
 	filterPublicPaths(doc, public.tag)
 
+	if !legacySchemaShapes {
+		// Documents were always written with the schemas that fields use copied
+		// into place, because the titles that say which component a copy is of
+		// were made short before anything looked at them. The references are made
+		// first, so that what is used is known and nothing is copied.
+		slimSchemas(doc, genericTitles)
+	}
+
 	// last, remove the schemas that are no longer used (judged by the filtered paths)
 	removeUnusedSchemas(doc, forceKeep)
 
@@ -67,33 +75,7 @@ func generatePublicYAML(doc *openapi3.T, outputPath string, genericTitles, force
 
 // GenerateYAML serializes the document with a wrapper of our own.
 func GenerateYAML(doc *openapi3.T, genericTitles []string) ([]byte, error) {
-	// 1. clean up the invalid references
-	for _, k := range sortedKeys(doc.Components.Schemas) {
-		v := doc.Components.Schemas[k]
-		if v != nil && v.Ref == engine.NewRefFromFullKey(k) {
-			// A named slice/alias may be emitted as a self-ref. The component
-			// already carries its parsed value, so retain that value and avoid
-			// serializing an immediately recursive root definition.
-			copyRef := *v
-			copyRef.Ref = ""
-			v = &copyRef
-		}
-		v = processSchemaRef(doc, v)
-		if vv, updated := hideOneOf(v, "", genericTitles); updated {
-			doc.Components.Schemas[k] = vv
-		} else {
-			doc.Components.Schemas[k] = v
-		}
-	}
-	for _, k := range sortedKeys(doc.Components.Schemas) {
-		v := doc.Components.Schemas[k]
-		if v != nil && v.Ref == engine.NewRefFromFullKey(k) {
-			copyRef := *v
-			copyRef.Ref = ""
-			v = &copyRef
-		}
-		doc.Components.Schemas[k] = slimComponent(doc, k, v)
-	}
+	slimSchemas(doc, genericTitles)
 	if err := normalizeLocalSchemaRefs(doc); err != nil {
 		return nil, err
 	}
@@ -122,6 +104,39 @@ func GenerateYAML(doc *openapi3.T, genericTitles []string) ([]byte, error) {
 		return nil, fmt.Errorf("validate marshaled OpenAPI document: %w", err)
 	}
 	return yamlData, nil
+}
+
+// slimSchemas cleans up the references of the components, and turns the schema
+// of a field that says which component it is a copy of into a reference to it.
+func slimSchemas(doc *openapi3.T, genericTitles []string) {
+	// 1. clean up the invalid references
+	hider := &oneOfHider{genericTitles: genericTitles, done: map[hiddenOneOf]hiddenOneOfResult{}}
+	for _, k := range sortedKeys(doc.Components.Schemas) {
+		v := doc.Components.Schemas[k]
+		if v != nil && v.Ref == engine.NewRefFromFullKey(k) {
+			// A named slice/alias may be emitted as a self-ref. The component
+			// already carries its parsed value, so retain that value and avoid
+			// serializing an immediately recursive root definition.
+			copyRef := *v
+			copyRef.Ref = ""
+			v = &copyRef
+		}
+		v = processSchemaRef(doc, v)
+		if vv, updated := hider.hide(v, ""); updated {
+			doc.Components.Schemas[k] = vv
+		} else {
+			doc.Components.Schemas[k] = v
+		}
+	}
+	for _, k := range sortedKeys(doc.Components.Schemas) {
+		v := doc.Components.Schemas[k]
+		if v != nil && v.Ref == engine.NewRefFromFullKey(k) {
+			copyRef := *v
+			copyRef.Ref = ""
+			v = &copyRef
+		}
+		doc.Components.Schemas[k] = slimComponent(doc, k, v)
+	}
 }
 
 // normalizeLocalSchemaRefs verifies that every local schema reference has a
@@ -379,6 +394,15 @@ func slimChild(doc *openapi3.T, child *openapi3.SchemaRef, visited map[string]bo
 		return &openapi3.SchemaRef{Ref: ref}
 	}
 	expanded := processSchemaRef(doc, child)
+	if !legacySchemaShapes && expanded != nil && expanded.Ref != "" {
+		// A reference is written as one: what it refers to is a component, which is
+		// slimmed on its own turn. Going down into it again for every path that leads
+		// to it makes the walk as long as the number of paths, which is what a graph
+		// of types that share types has far more of than types. (Documents that were
+		// generated before depend on where the walk cut the cycles it met on the
+		// way, so a configuration that keeps legacy_schema_shapes keeps the walk.)
+		return expanded
+	}
 	if ref != "" && expanded != nil && expanded.Ref == "" {
 		// The schema of the component is in place of the reference: walking it is
 		// walking inside the component.
@@ -528,7 +552,38 @@ func getSchemaNodeID(schemaRef *openapi3.SchemaRef) string {
 	return fmt.Sprintf("schemaref@%p", schemaRef)
 }
 
-func hideOneOf(rootRef *openapi3.SchemaRef, parentTitle string, genericTitles []string) (*openapi3.SchemaRef, bool) {
+// oneOfHider narrows the oneOf of the schemas of generic types by the type
+// arguments in their titles. What it makes of a schema depends on the schema and
+// the title it is under, and on nothing else, so it is made once: the schemas
+// that types share are reached by every path that leads to them, and the paths
+// of a graph of types are far more than its types.
+type oneOfHider struct {
+	genericTitles []string
+	done          map[hiddenOneOf]hiddenOneOfResult
+}
+
+type hiddenOneOf struct {
+	schema      *openapi3.SchemaRef
+	parentTitle string
+}
+
+type hiddenOneOfResult struct {
+	ref     *openapi3.SchemaRef
+	updated bool
+}
+
+func (h *oneOfHider) hide(rootRef *openapi3.SchemaRef, parentTitle string) (*openapi3.SchemaRef, bool) {
+	key := hiddenOneOf{rootRef, parentTitle}
+	if r, ok := h.done[key]; ok {
+		return r.ref, r.updated
+	}
+	ref, updated := h.hideOnce(rootRef, parentTitle)
+	h.done[key] = hiddenOneOfResult{ref, updated}
+	return ref, updated
+}
+
+func (h *oneOfHider) hideOnce(rootRef *openapi3.SchemaRef, parentTitle string) (*openapi3.SchemaRef, bool) {
+	genericTitles := h.genericTitles
 	root := rootRef.Value
 	if root == nil {
 		return rootRef, false
@@ -573,7 +628,7 @@ func hideOneOf(rootRef *openapi3.SchemaRef, parentTitle string, genericTitles []
 			continue
 		}
 
-		if vv, ok := hideOneOf(v, title, genericTitles); ok {
+		if vv, ok := h.hide(v, title); ok {
 			overwritePM[k] = vv
 		}
 	}
@@ -593,7 +648,7 @@ func hideOneOf(rootRef *openapi3.SchemaRef, parentTitle string, genericTitles []
 	}
 
 	if root.Items != nil {
-		if vv, ok := hideOneOf(root.Items, title, genericTitles); ok {
+		if vv, ok := h.hide(root.Items, title); ok {
 			cop := *root
 			cop.Items = vv
 			tmp := *rootRef

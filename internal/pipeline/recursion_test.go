@@ -56,6 +56,19 @@ func generateFixtureWith(t *testing.T, dir, configFile, name string) *openapi3.T
 
 const recursionPrefix = "#/components/schemas/example.com.recursion."
 
+// referenceOf is the component a field refers to: a field that has a comment of
+// its own refers to it from the only member of an allOf, which can have the
+// description.
+func referenceOf(ref *openapi3.SchemaRef) string {
+	if ref == nil {
+		return ""
+	}
+	if ref.Ref == "" && ref.Value != nil && len(ref.Value.AllOf) == 1 {
+		return ref.Value.AllOf[0].Ref
+	}
+	return ref.Ref
+}
+
 // A type that contains itself, directly or through another type, is described
 // with a $ref to itself. Describing it inline would never end: the document
 // would have to contain a copy of the type inside the copy of the type.
@@ -80,8 +93,11 @@ func TestATypeThatContainsItselfIsAReference(t *testing.T) {
 			if got := children.Value.Description; got != "Children are the nodes below this one." {
 				t.Errorf("the description of children = %q: a field's description stays on the field", got)
 			}
-			if got := props["parent"].Ref; got != recursionPrefix+"tree.Node" {
+			if got := referenceOf(props["parent"]); got != recursionPrefix+"tree.Node" {
 				t.Errorf("parent refers to %q, want Node", got)
+			}
+			if got := props["parent"].Value.Description; got != "Parent is the node above this one." {
+				t.Errorf("the description of parent = %q: it is written next to the reference", got)
 			}
 			if got := props["siblings"].Value.Items.Ref; got != recursionPrefix+"tree.Node" {
 				t.Errorf("the items of siblings refer to %q, want Node", got)
@@ -95,16 +111,11 @@ func TestATypeThatContainsItselfIsAReference(t *testing.T) {
 			if got := folder.Properties["files"].Value.Items.Ref; got != recursionPrefix+"tree.File" {
 				t.Errorf("the files of a folder refer to %q, want File", got)
 			}
-			// A field that has a description may carry a copy of its type instead of
-			// a reference to it. Either way the files of that folder refer to File
-			// and the copy does not go on for ever.
+			// The folder a file is in is a reference to Folder, with the description of
+			// the field next to it.
 			folderOfFile := file.Properties["folder"]
-			switch {
-			case folderOfFile.Ref == recursionPrefix+"tree.Folder":
-			case folderOfFile.Value != nil && folderOfFile.Value.Properties["files"] != nil &&
-				folderOfFile.Value.Properties["files"].Value.Items.Ref == recursionPrefix+"tree.File":
-			default:
-				t.Errorf("the folder of a file = %+v: neither a reference to Folder nor a copy of it", folderOfFile)
+			if got := referenceOf(folderOfFile); got != recursionPrefix+"tree.Folder" {
+				t.Errorf("the folder of a file = %+v: not a reference to Folder", folderOfFile)
 			}
 		})
 	}
@@ -124,7 +135,11 @@ const hidingPrefix = "example.com.hiding.domain."
 
 func propertyNames(schema *openapi3.SchemaRef) []string {
 	var names []string
-	for name := range schema.Value.Properties {
+	value := schema.Value
+	if len(value.AllOf) == 1 && value.AllOf[0].Value != nil {
+		value = value.AllOf[0].Value // a field with a comment of its own refers to its type from an allOf
+	}
+	for name := range value.Properties {
 		names = append(names, name)
 	}
 	sort.Strings(names)
@@ -328,11 +343,7 @@ func TestTheValuesOfAMapAreDescribed(t *testing.T) {
 
 			owners := props["owners"].Value.AdditionalProperties
 			require.NotNil(t, owners.Schema, "owners: the values have a schema")
-			if name == "internal" {
-				assert.Equal(t, "#/components/schemas/"+mapsPrefix+"Owner", owners.Schema.Ref, "a struct is a reference")
-			} else {
-				assert.Contains(t, propertyNames(owners.Schema), "name", "the public document writes a type out where it is used")
-			}
+			assert.Equal(t, "#/components/schemas/"+mapsPrefix+"Owner", owners.Schema.Ref, "a struct is a reference, in the public document too")
 
 			extra := props["extra"].Value.AdditionalProperties
 			assert.Nil(t, extra.Schema, "a map of any says no more than true")
@@ -356,4 +367,77 @@ func TestLegacySchemaShapesKeepTheMapsAsTheyWere(t *testing.T) {
 	require.NotNil(t, owners.Has)
 	assert.True(t, *owners.Has)
 	assert.True(t, props["photo"].Value.Type.Is("array"), "a slice of bytes is an array of strings")
+}
+
+const commentsPrefix = "example.com.comments.m."
+
+// What a field says about itself is written with the field, and the same way
+// whatever order the types are declared in: a field of a type that is a component
+// refers to it from the only member of an allOf, which can have a description, a
+// flag, an example and a default, and a field that says nothing is the reference. The
+// comment of a type is the description of its component, and a list is described
+// once, not once for each level it is made of.
+func TestWhatAFieldSaysAboutItselfIsWrittenWithTheField(t *testing.T) {
+	for _, name := range []string{"internal", "public"} {
+		t.Run(name, func(t *testing.T) {
+			doc := generateFixture(t, "testdata/comments", name)
+			pet := doc.Components.Schemas[commentsPrefix+"Pet"]
+			require.NotNil(t, pet)
+			assert.Equal(t, "Pet is an animal, with fields of types declared before and after it.", pet.Value.Description)
+			props := pet.Value.Properties
+
+			for field, want := range map[string]string{
+				"home":   "Home is of a type declared after Pet.",
+				"before": "Before is of a type declared before Pet.",
+				"plain":  "Plain says nothing about its type.",
+			} {
+				p := props[field]
+				require.NotNil(t, p, field)
+				assert.Empty(t, p.Ref, field)
+				require.Len(t, p.Value.AllOf, 1, "%s: a reference with a description of its own", field)
+				assert.Equal(t, want, p.Value.Description, field)
+				assert.Contains(t, p.Value.AllOf[0].Ref, commentsPrefix, field)
+			}
+			assert.Equal(t, "#/components/schemas/"+commentsPrefix+"Birth", props["bare"].Ref, "a field with nothing to say is the reference, in either order")
+
+			kind := props["kind"].Value
+			require.Len(t, kind.AllOf, 1)
+			assert.Equal(t, "Kind is what the pet is.", kind.Description)
+			assert.EqualValues(t, 1, kind.Example, "the example is a value of the enum it refers to")
+			assert.EqualValues(t, 0, kind.Default)
+
+			maybe := props["maybe"].Value
+			assert.True(t, maybe.Nullable, "nullable is said next to the reference")
+			assert.Len(t, maybe.AllOf, 1)
+
+			others := props["others"].Value
+			assert.Equal(t, "Others own it too.", others.Description)
+			assert.Equal(t, "#/components/schemas/"+commentsPrefix+"Birth", others.Items.Ref, "the elements are the reference, with no comment of the field next to it")
+
+			matrix := props["matrix"].Value
+			assert.Equal(t, "Matrix is a matrix of numbers.", matrix.Description)
+			assert.Empty(t, matrix.Items.Value.Description)
+			assert.Empty(t, matrix.Items.Value.Items.Value.Description)
+			assert.Empty(t, props["tags"].Value.Items.Value.Description)
+
+			birth := doc.Components.Schemas[commentsPrefix+"Birth"]
+			require.NotNil(t, birth, "the public document keeps the component the references are to")
+			assert.Equal(t, "Birth is when and where.", birth.Value.Description)
+			kindComponent := doc.Components.Schemas[commentsPrefix+"Kind"]
+			require.NotNil(t, kindComponent)
+			assert.True(t, strings.HasPrefix(kindComponent.Value.Description, "Kind says what a pet is.\n\nEnums"), "the comment of the type first, then its values: %q", kindComponent.Value.Description)
+		})
+	}
+}
+
+// compat.legacy_schema_shapes keeps documents the way they were: a comment on a field
+// of a type that is declared after the struct copies the type into the field.
+func TestLegacySchemaShapesKeepTheCommentsAsTheyWere(t *testing.T) {
+	doc := generateFixtureWith(t, "testdata/comments", "docgen-legacy.yaml", "internal")
+	props := doc.Components.Schemas[commentsPrefix+"Pet"].Value.Properties
+
+	assert.Empty(t, doc.Components.Schemas[commentsPrefix+"Pet"].Value.Description, "a type's comment is not its description")
+	assert.Empty(t, props["home"].Value.AllOf)
+	assert.NotEmpty(t, props["home"].Value.Properties, "a type declared after the struct is copied into a field that has a comment")
+	assert.Equal(t, "#/components/schemas/"+commentsPrefix+"Early", props["before"].Ref, "one declared before is a reference, and the comment is lost")
 }

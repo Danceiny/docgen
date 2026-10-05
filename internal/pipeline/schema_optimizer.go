@@ -9,12 +9,13 @@ import (
 )
 
 func simplifyTitles(doc *openapi3.T) {
+	seen := map[*openapi3.Schema]bool{}
 	// schemas in Components.Schemas
 	for _, schema := range doc.Components.Schemas {
 		if schema.Value == nil {
 			continue
 		}
-		simplifySchemaTitles(schema.Value)
+		simplifySchemaTitles(schema.Value, seen)
 	}
 
 	// schemas written inline in the paths
@@ -32,7 +33,7 @@ func simplifyTitles(doc *openapi3.T) {
 			// schemas of the request parameters
 			for _, param := range op.Parameters {
 				if param.Value != nil && param.Value.Schema != nil {
-					simplifySchemaTitles(param.Value.Schema.Value)
+					simplifySchemaTitles(param.Value.Schema.Value, seen)
 				}
 			}
 
@@ -40,7 +41,7 @@ func simplifyTitles(doc *openapi3.T) {
 			if op.RequestBody != nil && op.RequestBody.Value != nil {
 				for _, content := range op.RequestBody.Value.Content {
 					if content.Schema != nil {
-						simplifySchemaTitles(content.Schema.Value)
+						simplifySchemaTitles(content.Schema.Value, seen)
 					}
 				}
 			}
@@ -50,7 +51,7 @@ func simplifyTitles(doc *openapi3.T) {
 				if response.Value != nil {
 					for _, content := range response.Value.Content {
 						if content.Schema != nil {
-							simplifySchemaTitles(content.Schema.Value)
+							simplifySchemaTitles(content.Schema.Value, seen)
 						}
 					}
 				}
@@ -60,10 +61,11 @@ func simplifyTitles(doc *openapi3.T) {
 }
 
 // simplifySchemaTitles simplifies the title of a schema and of everything nested in it.
-func simplifySchemaTitles(schema *openapi3.Schema) {
-	if schema == nil {
-		return
+func simplifySchemaTitles(schema *openapi3.Schema, seen map[*openapi3.Schema]bool) {
+	if schema == nil || seen[schema] {
+		return // a schema that many others use is simplified once, not once for each way to it
 	}
+	seen[schema] = true
 
 	// simplify the title of this schema
 	schema.Title = simplifyTitle(schema.Title)
@@ -71,35 +73,35 @@ func simplifySchemaTitles(schema *openapi3.Schema) {
 	// go through all properties
 	for _, prop := range schema.Properties {
 		if prop.Value != nil {
-			simplifySchemaTitles(prop.Value)
+			simplifySchemaTitles(prop.Value, seen)
 		}
 	}
 
 	// array items
 	if schema.Items != nil && schema.Items.Value != nil {
-		simplifySchemaTitles(schema.Items.Value)
+		simplifySchemaTitles(schema.Items.Value, seen)
 	}
 
 	// allOf, oneOf, anyOf
 	for _, subSchema := range schema.AllOf {
 		if subSchema.Value != nil {
-			simplifySchemaTitles(subSchema.Value)
+			simplifySchemaTitles(subSchema.Value, seen)
 		}
 	}
 	for _, subSchema := range schema.OneOf {
 		if subSchema.Value != nil {
-			simplifySchemaTitles(subSchema.Value)
+			simplifySchemaTitles(subSchema.Value, seen)
 		}
 	}
 	for _, subSchema := range schema.AnyOf {
 		if subSchema.Value != nil {
-			simplifySchemaTitles(subSchema.Value)
+			simplifySchemaTitles(subSchema.Value, seen)
 		}
 	}
 
 	// additionalProperties
 	if schema.AdditionalProperties.Schema != nil && schema.AdditionalProperties.Schema.Value != nil {
-		simplifySchemaTitles(schema.AdditionalProperties.Schema.Value)
+		simplifySchemaTitles(schema.AdditionalProperties.Schema.Value, seen)
 	}
 }
 
@@ -114,12 +116,13 @@ func simplifyTitle(v string) string {
 
 // optimizeAnyOfAllOfOrder orders anyOf/allOf so that the error responses come last.
 func optimizeAnyOfAllOfOrder(doc *openapi3.T) {
+	seen := map[*openapi3.Schema]bool{}
 	// schemas in Components.Schemas
 	for _, schema := range doc.Components.Schemas {
 		if schema.Value == nil {
 			continue
 		}
-		optimizeSchemaAnyOfAllOfOrder(schema.Value)
+		optimizeSchemaAnyOfAllOfOrder(schema.Value, seen)
 	}
 
 	// schemas written inline in the paths
@@ -137,7 +140,7 @@ func optimizeAnyOfAllOfOrder(doc *openapi3.T) {
 			// schemas of the request parameters
 			for _, param := range op.Parameters {
 				if param.Value != nil && param.Value.Schema != nil {
-					optimizeSchemaAnyOfAllOfOrder(param.Value.Schema.Value)
+					optimizeSchemaAnyOfAllOfOrder(param.Value.Schema.Value, seen)
 				}
 			}
 
@@ -145,7 +148,7 @@ func optimizeAnyOfAllOfOrder(doc *openapi3.T) {
 			if op.RequestBody != nil && op.RequestBody.Value != nil {
 				for _, content := range op.RequestBody.Value.Content {
 					if content.Schema != nil {
-						optimizeSchemaAnyOfAllOfOrder(content.Schema.Value)
+						optimizeSchemaAnyOfAllOfOrder(content.Schema.Value, seen)
 					}
 				}
 			}
@@ -155,7 +158,7 @@ func optimizeAnyOfAllOfOrder(doc *openapi3.T) {
 				if response.Value != nil {
 					for _, content := range response.Value.Content {
 						if content.Schema != nil {
-							optimizeSchemaAnyOfAllOfOrder(content.Schema.Value)
+							optimizeSchemaAnyOfAllOfOrder(content.Schema.Value, seen)
 						}
 					}
 				}
@@ -165,10 +168,11 @@ func optimizeAnyOfAllOfOrder(doc *openapi3.T) {
 }
 
 // optimizeSchemaAnyOfAllOfOrder orders anyOf/allOf in a schema and in everything nested in it.
-func optimizeSchemaAnyOfAllOfOrder(schema *openapi3.Schema) {
-	if schema == nil {
+func optimizeSchemaAnyOfAllOfOrder(schema *openapi3.Schema, seen map[*openapi3.Schema]bool) {
+	if schema == nil || seen[schema] {
 		return
 	}
+	seen[schema] = true
 
 	// order anyOf/allOf of this schema
 	optimizeAnyOfAllOfOrderInSchema(schema)
@@ -176,35 +180,35 @@ func optimizeSchemaAnyOfAllOfOrder(schema *openapi3.Schema) {
 	// go through all properties
 	for _, prop := range schema.Properties {
 		if prop.Value != nil {
-			optimizeSchemaAnyOfAllOfOrder(prop.Value)
+			optimizeSchemaAnyOfAllOfOrder(prop.Value, seen)
 		}
 	}
 
 	// array items
 	if schema.Items != nil && schema.Items.Value != nil {
-		optimizeSchemaAnyOfAllOfOrder(schema.Items.Value)
+		optimizeSchemaAnyOfAllOfOrder(schema.Items.Value, seen)
 	}
 
 	// allOf, oneOf, anyOf
 	for _, subSchema := range schema.AllOf {
 		if subSchema.Value != nil {
-			optimizeSchemaAnyOfAllOfOrder(subSchema.Value)
+			optimizeSchemaAnyOfAllOfOrder(subSchema.Value, seen)
 		}
 	}
 	for _, subSchema := range schema.OneOf {
 		if subSchema.Value != nil {
-			optimizeSchemaAnyOfAllOfOrder(subSchema.Value)
+			optimizeSchemaAnyOfAllOfOrder(subSchema.Value, seen)
 		}
 	}
 	for _, subSchema := range schema.AnyOf {
 		if subSchema.Value != nil {
-			optimizeSchemaAnyOfAllOfOrder(subSchema.Value)
+			optimizeSchemaAnyOfAllOfOrder(subSchema.Value, seen)
 		}
 	}
 
 	// additionalProperties
 	if schema.AdditionalProperties.Schema != nil && schema.AdditionalProperties.Schema.Value != nil {
-		optimizeSchemaAnyOfAllOfOrder(schema.AdditionalProperties.Schema.Value)
+		optimizeSchemaAnyOfAllOfOrder(schema.AdditionalProperties.Schema.Value, seen)
 	}
 }
 

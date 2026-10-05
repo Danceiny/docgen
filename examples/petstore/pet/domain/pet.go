@@ -5,9 +5,8 @@ import "time"
 
 // Status is where a pet is in the adoption process.
 //
-// Old clients may still send the retired values, which the service accepts; they
-// are not documented: the directive below leaves out every value that starts with
-// StatusLegacy.
+// Old clients may still send the retired values, which the service accepts; the
+// directive below leaves them out of the documents.
 //
 //apidoc:public:-StatusLegacy*
 type Status string

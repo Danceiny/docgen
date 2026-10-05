@@ -127,8 +127,9 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
 - 字段的 `validate` 或 `binding` tag 含有规则 `required`（`validate:"required,email"` 含有），或带 `required:"true"` 时为必填。
   `json:"x,nullable"` 表示可为 null。
 - `example:"..."` 和 `default:"..."` tag（或 `json:"x,default=..."`）给出字段的示例和默认值。
-- **字段**的注释（在字段上方或行尾）就是它的描述；类型的注释不会用到。类型是组件的字段是 `$ref`，
-  而 OpenAPI 3.0 不允许 `$ref` 旁边有描述，所以内部文档会略去这种字段的注释。
+- **类型**的注释是其组件的描述（枚举的注释在前，随后是值的列表）。**字段**的注释（在字段上方或行尾）是该字段的描述。
+  类型是组件的字段，在自己有话要说（描述、`nullable`、`example` 或 `default`）时，通过 `allOf` 的唯一成员引用它，
+  因为 OpenAPI 3.0 在 `$ref` 旁边没有这些的位置；没有话要说的字段就是 `$ref` 本身。列表或 map 的注释属于列表或 map，不属于它里面的元素。
 - 为具名类型声明的常量使它成为**枚举**，不论常量怎样声明（`iota`、移位、表达式）：编译器算出的值列在 `enum` 里，
   常量的名字和注释列在描述里。类型至少有一个常量用该类型声明（`A Status = iota`）才是枚举；
   `type Status = string` 只是 `string` 的另一个名字，只有用这个名字声明的常量才让它成为枚举。
@@ -340,7 +341,10 @@ compat:
   带 json 名字的内嵌 struct 被展开；`validate:"required,email"` 不会让字段必填，只有 `validate:"required"` 才会；
   `any` 是 `object`，`interface{}` 是字符串、整数或对象；枚举的值是用该类型和字面量声明的常量，
   所以 `iota` 和表达式给出空值，隐式重复类型的常量缺失；map 的值类型丢失（`additionalProperties: true`）；
-  字节切片是字符串数组，byte 是字符串；枚举类型在 `type_map` 里的条目被忽略。
+  字节切片是字符串数组，byte 是字符串；枚举类型在 `type_map` 里的条目被忽略；类型的注释不是它的描述；
+  字段的注释会被复制到它的列表的元素上；有注释的字段，若其类型声明在所在 struct 之后，会被替换成该类型的副本，
+  声明在之前则是丢了注释的 `$ref`；公开文档把字段所用的类型就地展开而不是引用，所以它随到某个类型的路径数增长，
+  而不是随类型数增长；example 和 default tag 按字段的 Go 类型读取，类型不允许的值会让运行失败。
 
 ## 已知限制
 
@@ -349,12 +353,12 @@ docgen 还很年轻。以下限制已知，后续版本会改变，请不要依�
 - **其他模块的类型就地展开**，作为内联 schema 而不是组件；其中包含自身的类型第二次出现时只是一个 `object`。
   不要把它们用作接口的请求或响应类型：用你模块里的类型包一层。自定义的 marshaler 不会被读取，
   所以写出来的形式与 Go 形状不同的类型（`net.IP`、`big.Int`、字节数组的 UUID）需要 `type_map` 条目。
-- **公开文档是扁平的**：字段所用的类型就地展开而不是引用，以名字作为 title，只有接口收发的类型才是组件。
-  很深或菱形的类型图会让它变得很大。从未被填充的 schema 上可能出现标记 `pattern: default`。
+- 标记 `pattern: default` 出现在 docgen 无法填充的 schema 上：类型参数的列表的元素、不属于它能读取的包的类型。
+- **把你的 API 用到的每个类型所在的包都放进 `models`。** 模块里不在 `models` 中的类型会在字段用到它时才被加载，
+  并与使用它的字段共享 schema，所以其中某个字段的注释或示例可能变成它的描述。
 - `json:",string"` 被忽略，指针除非写了 `json:"x,nullable"` 否则不可为 null，`json.RawMessage` 是 `string`（它其实可以是任意 JSON）。
 - **泛型按声明文档化**：类型参数类型的字段没有 schema，有多个类型参数的泛型类型不受支持。
 - **query 参数是在 `request.query` 里手写的**，不是从 struct 读取的，对每个收该类型的接口都生效。
-- 类型的注释不是它的描述，内部文档会略去 `$ref` 字段的注释。
 - 接口的请求和响应类型必须声明在匹配 `models` 的包里。
 - 文档是 OpenAPI 3.0；kin-openapi 不写 3.1。
 - 每次运行都会加载并类型检查整个模块（`./...`），模块里任何包无法构建时都会失败，并说明原因。

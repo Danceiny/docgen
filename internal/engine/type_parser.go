@@ -139,13 +139,16 @@ func (p *TypeParser) parseTypeSpecOccupied(typeSpec *ast.TypeSpec, ctx *ParseCon
 		if ident, ok := typeSpec.Type.(*ast.Ident); ok {
 			underlyingType = ident.Name
 		}
-		p.handleSchema(typeSpec, fullKey, schema, underlyingType)
+		p.handleSchema(typeSpec, fullKey, schema, underlyingType, ctx)
 		return
 	}
 	switch t := typeSpec.Type.(type) {
 	case *ast.StructType:
 		underlyingType = "StructType"
 		schema = p.parseStruct(t, ctx)
+		if !settings.CompatLegacySchemaShapes && schema != nil && schema.Value != nil && schema.Value.Description == "" {
+			schema.Value.Description = extractDescription(ctx.Doc, ctx.Comment)
+		}
 	case *ast.Ident:
 		// type definitions (such as type T string)
 		underlyingType = t.Name
@@ -158,7 +161,7 @@ func (p *TypeParser) parseTypeSpecOccupied(typeSpec *ast.TypeSpec, ctx *ParseCon
 		schema = p.parse(t, ctx)
 	}
 
-	p.handleSchema(typeSpec, fullKey, schema, underlyingType)
+	p.handleSchema(typeSpec, fullKey, schema, underlyingType, ctx)
 }
 
 // parse is the core of parsing, without locks.
@@ -183,9 +186,14 @@ func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.S
 	}
 	defer func() {
 		if schema != nil && schema.Value != nil && ctx != nil {
-			// nullability only matters in the context of a field
-			schema.Value.Nullable = isNullableFromField(ctx.Field)
-			schema.Value.Description = extractDescription(ctx.Doc, ctx.Comment)
+			if settings.CompatLegacySchemaShapes || schema.Ref == "" {
+				// nullability only matters in the context of a field
+				schema.Value.Nullable = isNullableFromField(ctx.Field)
+				schema.Value.Description = extractDescription(ctx.Doc, ctx.Comment)
+			}
+			// A reference has no description or nullability of its own: that of the
+			// field that uses it is written with it (see describeReference), since
+			// what it refers to is shared with every other use.
 		}
 		// nil has to be allowed to update here too!
 		// only some types need their schema written

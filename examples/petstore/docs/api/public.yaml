@@ -2,6 +2,7 @@ openapi: 3.0.0
 components:
     schemas:
         example.com.petstore.pet.domain.Category:
+            description: 'Category groups pets: dogs, cats, birds.'
             properties:
                 children:
                     description: |-
@@ -20,6 +21,7 @@ components:
             title: Category
             type: object
         example.com.petstore.pet.domain.Pet:
+            description: Pet is an animal that can be adopted.
             properties:
                 attributes:
                     additionalProperties:
@@ -31,28 +33,11 @@ components:
                     format: date-time
                     type: string
                 category:
-                    properties:
-                        children:
-                            description: |-
-                                Children are the more specific categories: dogs have breeds. A type that
-                                contains itself is described once and referred to by name.
-                            items:
-                                $ref: '#/components/schemas/example.com.petstore.pet.domain.Category'
-                            type: array
-                        id:
-                            example: 7
-                            format: int64
-                            type: integer
-                        name:
-                            example: dog
-                            type: string
-                    title: Category
-                    type: object
+                    $ref: '#/components/schemas/example.com.petstore.pet.domain.Category'
                 fee:
+                    allOf:
+                        - $ref: '#/components/schemas/example.com.petstore.pet.domain.Price'
                     description: Fee is the adoption fee.
-                    example: "12.50"
-                    title: Price
-                    type: string
                 id:
                     description: ID is assigned when the pet is created.
                     example: p-1001
@@ -62,23 +47,12 @@ components:
                     example: Rex
                     type: string
                 size:
-                    enum:
-                        - 0
-                        - 1
-                        - 2
-                    title: Size
-                    type: integer
+                    $ref: '#/components/schemas/example.com.petstore.pet.domain.Size'
                 status:
-                    enum:
-                        - available
-                        - reserved
-                        - adopted
-                    title: Status
-                    type: string
+                    $ref: '#/components/schemas/example.com.petstore.pet.domain.Status'
                 tags:
                     description: Tags are free words that help to find the pet.
                     items:
-                        description: Tags are free words that help to find the pet.
                         type: string
                     type: array
             required:
@@ -86,7 +60,31 @@ components:
                 - name
             title: Pet
             type: object
+        example.com.petstore.pet.domain.Price:
+            description: |-
+                Price is an amount of money in dollars. It is written as a string such as
+                "12.50", not as a number, so that no client rounds it.
+            example: "12.50"
+            title: Price
+            type: string
+        example.com.petstore.pet.domain.Size:
+            description: "Size is how big a pet grows. The values are what iota counts, and the document\nhas them.\n\nEnums \n- `SizeSmall` (`0`): means up to 10 kg.\n- `SizeMedium` (`1`): means up to 25 kg.\n- `SizeLarge` (`2`): means more than that.\n"
+            enum:
+                - 0
+                - 1
+                - 2
+            title: Size
+            type: integer
+        example.com.petstore.pet.domain.Status:
+            description: "Status is where a pet is in the adoption process.\n\nOld clients may still send the retired values, which the service accepts; the\ndirective below leaves them out of the documents.\n\nEnums \n- `StatusAvailable` (`available`): means the pet can be adopted.\n- `StatusReserved` (`reserved`): means the pet is held for a customer.\n- `StatusAdopted` (`adopted`): means the pet has a home.\n"
+            enum:
+                - available
+                - reserved
+                - adopted
+            title: Status
+            type: string
         example.com.petstore.pet.protocol.AuthHeader:
+            description: AuthHeader is the header every request of the API carries.
             properties:
                 Authorization:
                     description: Authorization is "Bearer <token>".
@@ -96,6 +94,7 @@ components:
             title: AuthHeader
             type: object
         example.com.petstore.pet.protocol.GetPetReq:
+            description: GetPetReq asks for one pet.
             properties:
                 id:
                     example: p-1001
@@ -105,82 +104,19 @@ components:
             title: GetPetReq
             type: object
         example.com.petstore.pet.protocol.ListPetsResp:
+            description: ListPetsResp is a page of pets.
             properties:
                 next:
                     description: Next is the cursor of the next page; empty when this is the last.
                     type: string
                 pets:
                     items:
-                        properties:
-                            attributes:
-                                additionalProperties:
-                                    type: string
-                                description: Attributes are free-form labels, such as the colour; the values are text.
-                                type: object
-                            bornAt:
-                                example: "2024-01-02T15:04:05Z"
-                                format: date-time
-                                type: string
-                            category:
-                                properties:
-                                    children:
-                                        description: |-
-                                            Children are the more specific categories: dogs have breeds. A type that
-                                            contains itself is described once and referred to by name.
-                                        items:
-                                            $ref: '#/components/schemas/example.com.petstore.pet.domain.Category'
-                                        type: array
-                                    id:
-                                        example: 7
-                                        format: int64
-                                        type: integer
-                                    name:
-                                        example: dog
-                                        type: string
-                                title: Category
-                                type: object
-                            fee:
-                                description: Fee is the adoption fee.
-                                example: "12.50"
-                                title: Price
-                                type: string
-                            id:
-                                description: ID is assigned when the pet is created.
-                                example: p-1001
-                                type: string
-                            name:
-                                description: Name is what the pet is called.
-                                example: Rex
-                                type: string
-                            size:
-                                enum:
-                                    - 0
-                                    - 1
-                                    - 2
-                                title: Size
-                                type: integer
-                            status:
-                                enum:
-                                    - available
-                                    - reserved
-                                    - adopted
-                                title: Status
-                                type: string
-                            tags:
-                                description: Tags are free words that help to find the pet.
-                                items:
-                                    description: Tags are free words that help to find the pet.
-                                    type: string
-                                type: array
-                        required:
-                            - id
-                            - name
-                        title: Pet
-                        type: object
+                        $ref: '#/components/schemas/example.com.petstore.pet.domain.Pet'
                     type: array
             title: ListPetsResp
             type: object
         example.com.petstore.pet.protocol.SearchReq:
+            description: SearchReq looks for pets by name.
             properties:
                 name:
                     description: Name is part of the name of the pets to find.
@@ -190,6 +126,7 @@ components:
             title: SearchReq
             type: object
         example.com.petstore.store.protocol.Order:
+            description: Order is an adoption that was placed.
             properties:
                 complete:
                     description: Complete is true once the pet has left the shelter.
@@ -203,6 +140,7 @@ components:
             title: Order
             type: object
         example.com.petstore.store.protocol.PlaceOrderReq:
+            description: PlaceOrderReq asks to adopt a pet.
             properties:
                 customerId:
                     type: string

@@ -87,7 +87,12 @@ type Compat struct {
 	// an enum are the constants that are declared with the type and a literal
 	// (so that a constant declared with iota or an expression has an empty value
 	// and one that repeats the type implicitly is left out), and the schema that
-	// type_map gives an enum type is ignored.
+	// type_map gives an enum type is ignored, the comment of a type is not its
+	// description, the comment of a field is copied onto the elements of its list
+	// and, depending on the order the types are declared in, the type is copied into
+	// the field or the comment is lost, a public document writes the types that
+	// fields use in place of references, and an example or a default that the type
+	// of the field does not allow stops the run.
 	LegacySchemaShapes bool `yaml:"legacy_schema_shapes"`
 }
 

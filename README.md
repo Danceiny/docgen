@@ -164,10 +164,14 @@ The named types of the `models` packages become **components**
   `json:"x,nullable"` makes it nullable.
 - `example:"..."` and `default:"..."` tags (or `json:"x,default=..."`) give the
   example and the default of a field.
-- The comment of a **field**, above it or after it, is its description. The comment
-  of a type is not used. A field whose type is a component is a `$ref`, and
-  OpenAPI 3.0 does not allow a description next to a `$ref`, so the internal
-  document leaves the comment of such a field out.
+- The comment of a **type** is the description of its component (for an enum it
+  comes first, then the list of the values). The comment of a **field**, above it
+  or after it, is its description. A field whose type is a component refers to it
+  from the only member of an `allOf` when it has something to say of its own, a
+  description, `nullable`, an `example` or a `default`, since OpenAPI 3.0 has no
+  place for those next to a `$ref`; a field with nothing to say is the `$ref`
+  itself. The comment of a list or a map is that of the list or the map, not of
+  what it holds.
 - Constants of a named type make it an **enum**, whichever way they are declared
   (`iota`, shifts, expressions): the values the compiler computes are listed in
   `enum`, with the names and the comments of the constants in the description. A
@@ -417,7 +421,14 @@ compat:
   constants declared with the type and a literal, so `iota` and expressions give an
   empty value and a constant that repeats the type implicitly is missing; the values
   of a map are lost (`additionalProperties: true`); a slice of bytes is an array of
-  strings and a byte a string; a `type_map` entry for an enum type is ignored.
+  strings and a byte a string; a `type_map` entry for an enum type is ignored; the
+  comment of a type is not its description; the comment of a field is copied onto
+  the elements of its list, and a field that has a comment and a type declared
+  after its struct is replaced by a copy of the type, while one declared before it
+  is a `$ref` that has lost the comment; a public document writes the types that
+  fields use in place of references, which makes it grow with the number of paths
+  to a type, not with the number of types; example and default tags are read by
+  the Go type of the field, and a value the type does not allow stops the run.
 
 ## Known limitations
 
@@ -430,19 +441,19 @@ on them.
   operation: wrap it in a type of your module. A custom marshaler is not read, so
   a type that writes itself as something else than its Go shape (`net.IP`,
   `big.Int`, a UUID that is an array of bytes) needs a `type_map` entry.
-- **A public document is flat**: a type that a field uses is written out in place
-  of a reference, with its name as the title, and only the types that operations
-  take or return are components. A deep or diamond-shaped type graph makes it
-  large. The marker `pattern: default` can show on a schema that was never filled
-  in.
+- The marker `pattern: default` shows on a schema that docgen could not fill in:
+  the items of a list of a type parameter, a type that is not a type of a package
+  it can read.
+- **Put the package of every type your API uses in `models`.** A type of the module
+  that is not in one is loaded when a field uses it, and shares its schema with
+  the fields that use it, so that the comment or the example of one of them can
+  become its description.
 - `json:",string"` is ignored, a pointer is not nullable unless `json:"x,nullable"`
   says so, and `json.RawMessage` is a `string` where it is any JSON.
 - **Generics are documented as declared**: a field of a type-parameter type has no
   schema, and a generic type with more than one type parameter is not supported.
 - **Query parameters are listed by hand** in `request.query`, not read from the
   struct, and apply to every operation that takes the type.
-- The comment of a type is not its description, and the internal document drops
-  the comment of a field that is a `$ref`.
 - The request and response types of an operation must be declared in a package
   that matches `models`.
 - The documents are OpenAPI 3.0; kin-openapi does not write 3.1.

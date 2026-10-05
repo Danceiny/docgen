@@ -86,6 +86,11 @@ func (p *TypeParser) parseArray(expr *ast.ArrayType, ctx *ParseContext) *openapi
 		}}
 	}
 	ctx2 := *ctx
+	if !settings.CompatLegacySchemaShapes {
+		// The comment and the tags of a field are those of the list, not of what
+		// it is a list of.
+		ctx2.Doc, ctx2.Comment, ctx2.Field = nil, nil, nil
+	}
 	if p.referenceHidden(expr.Elt, p.generateTypeKey(expr.Elt), &ParseContext{}) {
 		return nil // a list of a type that the document hides
 	}
@@ -94,7 +99,7 @@ func (p *TypeParser) parseArray(expr *ast.ArrayType, ctx *ParseContext) *openapi
 		// try to handle a type alias: if the element is an identifier, look for its type declaration in the current package
 		if ident, ok := expr.Elt.(*ast.Ident); ok {
 			if importAlias, targetType := findTypeRecursive(p.pkg, ident.Name); targetType != nil {
-				ctx3 := *ctx
+				ctx3 := ctx2
 				ctx3.importAlias = importAlias
 				// parse the underlying type recursively
 				elementRef = p.parse(targetType, &ctx3)

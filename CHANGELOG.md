@@ -39,14 +39,13 @@ release.
 - A type of another module is written out where it is used, not made a component,
   and when it contains itself it is an `object` the second time; a custom marshaler
   is not read.
-- A public document writes the types that fields use in place, and only the types
-  that operations take or return are components.
+- The marker `pattern: default` shows on a schema that docgen could not fill in.
+- A type of the module that is not in `models` shares its schema with the fields
+  that use it, so that the comment of one of them can become its description.
 - `json:",string"` is ignored, a pointer is not nullable unless `json:"x,nullable"`
   says so, and `json.RawMessage` is a `string`.
 - A generic type is documented as declared; the fields of a type-parameter type
   have no schema and only one type parameter is supported.
 - Query parameters are listed by hand in `request.query`.
-- The comment of a type is not its description; the internal document drops the
-  comment of a field that is a `$ref`.
 - An operation whose request or response type is declared outside the packages
   that `models` matches makes the run fail.

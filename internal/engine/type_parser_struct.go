@@ -118,6 +118,9 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 			Logger().Debug("field has no schema and is left out", "field", field.Names[0].Name, "fieldType", types.ExprString(ft), "at", p.at(field))
 			continue
 		}
+		if !settings.CompatLegacySchemaShapes {
+			fieldSchema = p.describeReference(field, fieldSchema, example, defaultVal)
+		}
 
 		// set the description of the field, with care for how placeholders are updated:
 		// only set Description when the schema is not the default placeholder, so that the update of placeholders is not broken
@@ -392,7 +395,7 @@ func (p *TypeParser) setExampleAndDefault(field *ast.Field, name string, schema 
 		if value == nil {
 			return
 		}
-		if err := schema.VisitJSON(value); err != nil {
+		if err := validationCopy(effectiveSchema(schema)).VisitJSON(value); err != nil {
 			warnAt("the "+tag+" tag of a field is not a value that the type of the field allows, so it is left out",
 				"field", name, "value", raw, "reason", firstLine(err.Error()), "at", p.at(field))
 			return
@@ -415,6 +418,7 @@ func valueOfTag(schema *openapi3.Schema, raw string, goType reflect.Type) any {
 		}
 		return raw
 	}
+	schema = effectiveSchema(schema)
 	switch {
 	case schema.Type.Is(openapi3.TypeString):
 		return raw
@@ -444,4 +448,64 @@ func valueOfTag(schema *openapi3.Schema, raw string, goType reflect.Type) any {
 func firstLine(s string) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
 	return line
+}
+
+// describeReference gives a field whose type is a component what the field says
+// about itself. OpenAPI 3.0 has no place for it next to a $ref, so the reference
+// is the only member of an allOf, which can have a description, a nullable flag,
+// an example and a default of its own. A field that says nothing keeps the plain
+// reference.
+func (p *TypeParser) describeReference(field *ast.Field, ref *openapi3.SchemaRef, example, defaultValue string) *openapi3.SchemaRef {
+	if ref.Ref == "" {
+		// A type that was parsed already is not a reference yet but a copy of its
+		// component, which says which one it is by its title.
+		if ref.Value == nil || ref.Value.Title == "" || p.doc == nil || p.doc.Components == nil || p.doc.Components.Schemas[ref.Value.Title] == nil {
+			return ref
+		}
+		ref = &openapi3.SchemaRef{Ref: NewRefFromFullKey(ref.Value.Title), Value: ref.Value}
+	}
+	description := extractDescription(field.Doc, field.Comment)
+	nullable := isNullableFromField(field)
+	if description == "" && !nullable && example == "" && defaultValue == "" {
+		return ref
+	}
+	return &openapi3.SchemaRef{Value: &openapi3.Schema{
+		AllOf:       openapi3.SchemaRefs{ref},
+		Description: description,
+		Nullable:    nullable,
+	}}
+}
+
+// effectiveSchema is the schema a value of a field has to be a value of: a
+// reference that has a description of its own is the only member of an allOf, and
+// the value is a value of what it refers to.
+func effectiveSchema(schema *openapi3.Schema) *openapi3.Schema {
+	for schema.Type == nil && len(schema.AllOf) == 1 && schema.AllOf[0] != nil && schema.AllOf[0].Value != nil {
+		schema = schema.AllOf[0].Value
+	}
+	return schema
+}
+
+// validationCopy is the schema with its enum written as the numbers of a JSON
+// document, which is what the validation of a value compares with: the values of
+// an enum of integers are integers of Go until the document is written.
+func validationCopy(schema *openapi3.Schema) *openapi3.Schema {
+	if len(schema.Enum) == 0 {
+		return schema
+	}
+	c := *schema
+	c.Enum = make([]any, len(schema.Enum))
+	for i, v := range schema.Enum {
+		switch n := v.(type) {
+		case int:
+			c.Enum[i] = float64(n)
+		case int64:
+			c.Enum[i] = float64(n)
+		case uint64:
+			c.Enum[i] = float64(n)
+		default:
+			c.Enum[i] = v
+		}
+	}
+	return &c
 }
