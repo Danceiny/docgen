@@ -135,3 +135,22 @@ func TestAPlaceholderInADocumentIsReported(t *testing.T) {
 		t.Errorf("reported %v, want %v", where, want)
 	}
 }
+
+// The order of the fields lists the fields the schema has: a field of an embedded
+// struct that its type hides from the document is not one of them.
+func TestFieldOrdersListOnlyTheFieldsASchemaHas(t *testing.T) {
+	schema := structSchema("a", "c")
+	schema.Value.Extensions = map[string]any{"x-apifox-orders": []string{"a", "b", "c"}}
+	empty := structSchema()
+	empty.Value.Extensions = map[string]any{"x-apifox-orders": []string{"gone"}}
+	doc := &openapi3.T{Components: &openapi3.Components{Schemas: openapi3.Schemas{"S": schema, "E": empty}}}
+
+	trimFieldOrders(doc)
+
+	if got := schema.Value.Extensions["x-apifox-orders"]; !reflect.DeepEqual(got, []string{"a", "c"}) {
+		t.Errorf("orders = %v", got)
+	}
+	if _, has := empty.Value.Extensions["x-apifox-orders"]; has {
+		t.Error("a schema with no field has no order of them")
+	}
+}

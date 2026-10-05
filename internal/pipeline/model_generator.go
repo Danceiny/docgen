@@ -90,7 +90,45 @@ func GenerateModels(doc *openapi3.T, inclusive, exclusive []string, sessions ...
 	}
 
 	runMergeTasks(doc, mergeTasks)
+	if !legacyOutput {
+		trimFieldOrders(doc)
+	}
 	return nil
+}
+
+// trimFieldOrders makes the order of the fields that a schema lists in
+// x-apifox-orders the fields it has: the names of the fields of an embedded struct
+// are those the declaration says, and some of them are hidden from the document
+// by their types.
+func trimFieldOrders(doc *openapi3.T) {
+	seen := map[*openapi3.Schema]bool{}
+	var walk func(ref *openapi3.SchemaRef)
+	walk = func(ref *openapi3.SchemaRef) {
+		if ref == nil || ref.Ref != "" || ref.Value == nil || seen[ref.Value] {
+			return
+		}
+		schema := ref.Value
+		seen[schema] = true
+		if names, ok := schema.Extensions["x-apifox-orders"].([]string); ok {
+			kept := make([]string, 0, len(names))
+			for _, name := range names {
+				if _, has := schema.Properties[name]; has {
+					kept = append(kept, name)
+				}
+			}
+			if len(kept) == 0 {
+				delete(schema.Extensions, "x-apifox-orders")
+			} else {
+				schema.Extensions["x-apifox-orders"] = kept
+			}
+		}
+		for _, child := range schemaChildren(schema) {
+			walk(child.ref)
+		}
+	}
+	for _, key := range sortedKeys(doc.Components.Schemas) {
+		walk(doc.Components.Schemas[key])
+	}
 }
 
 // runMergeTasks gives a struct the fields of the structs it embeds, again and
