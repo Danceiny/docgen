@@ -8,6 +8,8 @@ The generated documents of a version do not change within it.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-05
+
 ### Added
 
 - The first public version: `docgen` generates OpenAPI 3.0 documents from the Go
@@ -55,3 +57,6 @@ release.
 - Query parameters are listed by hand in `request.query`.
 - An operation whose request or response type is declared outside the packages
   that `models` matches makes the run fail.
+
+[Unreleased]: https://github.com/Danceiny/docgen/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Danceiny/docgen/releases/tag/v0.1.0
