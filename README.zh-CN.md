@@ -89,6 +89,7 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
   服务名可以含斜杠（`store/order`）。前缀默认 `/api`，可用 `api.prefix` 修改。`@path` 替换方法名（见下），
   以服务名开头的 `@path` 会被去掉这个前缀，按纯前缀处理：服务 `order` 的 `@path: /orderList` 是 `/api/order/list`，
   `@path: /order/list` 也是；方法名本身从不被去掉前缀（`OrderList` 是 `/api/order/orderList`）。
+  它是纯前缀，所以服务 `order` 的 `@path: /orders/list` 是 `/api/order/s/list`。
 - 默认 HTTP 方法是 `POST`，用 `@method` 修改；写了多个方法（`@method: GET, POST`）时每个方法一个接口，
   id 上加小写的方法名（`pet/get_get`、`pet/get_post`）。OpenAPI 不允许 `GET` 和 `DELETE` 带请求体，
   但 docgen 仍把这类接口的请求写成请求体，除非该请求类型列在 `request.query` 里，那样就变成 query 参数（见配置）。
@@ -138,6 +139,10 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
 - map 是 `object`，其 `additionalProperties` 是值的 schema（任意值的 map 是 `true`），`any` 和 `interface{}` 是空 schema，
   字节切片是 base64 `string`，byte 是数字。
 - 直接或经由其他类型包含自身的类型，表现为指向自身的 `$ref`。
+- 泛型类型按声明文档化。类型参数类型的字段没有 schema，除非它的注释列出它可能的类型（`@generic: Product, Order`），
+  这时它是这些组件的 `oneOf`；实例化的 `Page[Product]` 只保留其类型参数点名的分支，`generic_titles` 列出其 `oneOf`
+  保持完整的标题。只有一个这种字段的 struct 以第一个候选类型作标题。带方法的接口可以是任意 JSON 值，
+  除非它的注释写了 `@autowire: true`，这时它是同包中实现它的类型的 `oneOf`。
 - `time.Time` 是 `date-time` 字符串，`time.Duration` 是 `int64` 纳秒数，与 JSON 的写法一致。要改用 `type_map`。
 
 ### 谁能看到什么
@@ -169,7 +174,8 @@ Cost  int    `json:"cost"  apidoc:"hidden"`     // 完全不显示（`apidoc:"-"
 没有注解的内容在所有文档里都显示。
 
 被隐藏的类型没有 schema，会引用它的东西也没有：该类型的字段、它的列表或 map 的字段、内嵌它的 struct 都会被略去，
-收发它的接口也会被略去（并有警告说明是哪个）。枚举是例外：它会显示，只是值被隐藏。
+收发它的接口也会被略去（并有警告说明是哪个）。带 `//apidoc:hidden` 指令的枚举是例外：它会显示，只是值被隐藏；
+因名字而被隐藏的枚举则像任何类型一样被略去。
 
 旧形式 `apidoc:"Staff"` 只在 `legacy_field_tokens` 里列了 `Staff` 的文档中显示该字段。tag 的其他任何值都会让该字段
 在所有文档中被隐藏，docgen 会为此警告：手误和把描述写进了错误的 tag，是以这种方式丢字段的两种常见原因。
@@ -231,7 +237,7 @@ errors:                         # @response 引用的错误目录
   file: errors.json
   component_prefix: example.com.shop.errors.
 
-generic_titles: []              # 其 oneOf 不按类型参数收窄的泛型类型的完整 key
+generic_titles: []              # 其 oneOf 保持完整、不按持有它的标题里的类型参数收窄的 schema 的标题
 
 docs:
   - name: internal              # 用 -doc 选择文档
@@ -349,7 +355,12 @@ compat:
   - map 的值类型丢失（`additionalProperties: true`），字节切片是字符串数组，byte 是字符串；
   - 类型的注释不是它的描述，字段的注释会被复制到它的列表的元素上；有注释的字段，若其类型声明在所在 struct 之后，
     会被替换成该类型的副本，声明在之前则是丢了注释的 `$ref`；
-  - example 和 default tag 按字段的 Go 类型读取，类型不允许的值会让运行失败。
+  - example 和 default tag 按字段的 Go 类型读取，类型不允许的值会让运行失败；
+  - 声明为另一个类型的类型（`type Money2 Money`）和带方法的接口是占位符 `{type: object, pattern: default}`；
+  - `models` 之外的模块类型以第一个用到它的字段的注释为描述，且该字段 nullable 时它也 nullable，`type_map` 不描述 struct，
+    内嵌 struct 与外层同名的字段在内嵌写在后面时取内嵌的，内嵌的列表或 map 被略去，
+    因名字而隐藏的枚举和隐藏类型的 map 的 map 不会被隐藏；
+  - 没有分号的 `@generic` 会把候选类型留在描述里。
 
   文档方面的错误：公开文档把字段所用的类型就地展开而不是引用，所以它随到某个类型的路径数增长，而不是随类型数增长；
   注释以注解开头的接口，其 summary 就是那一行注解。
@@ -361,11 +372,10 @@ docgen 还很年轻。以下限制已知，后续版本会改变，请不要依�
 - **其他模块的类型就地展开**，作为内联 schema 而不是组件；其中包含自身的类型第二次出现时只是一个 `object`。
   不要把它们用作接口的请求或响应类型：用你模块里的类型包一层。自定义的 marshaler 不会被读取，
   所以写出来的形式与 Go 形状不同的类型（`net.IP`、`big.Int`、字节数组的 UUID）需要 `type_map` 条目。
-- 标记 `pattern: default` 出现在 docgen 无法填充的 schema 上：类型参数的列表的元素、不属于它能读取的包的类型。
-- **把你的 API 用到的每个类型所在的包都放进 `models`。** 模块里不在 `models` 中的类型会在字段用到它时才被加载，
-  并与使用它的字段共享 schema，所以其中某个字段的注释或示例可能变成它的描述。
+- 标记 `pattern: default` 出现在 docgen 无法填充的 schema 上，比如没有任何实现的 `@autowire` 接口；每一处都有警告。
 - `json:",string"` 被忽略，指针除非写了 `json:"x,nullable"` 否则不可为 null。
-- **泛型按声明文档化**：类型参数类型的字段没有 schema，有多个类型参数的泛型类型不受支持。
+- 枚举的常量必须声明在该类型所在的包里。
+- **泛型按声明文档化**，如上所述：只支持一个类型参数，没有 `@generic` 的类型参数字段没有 schema。
 - **query 参数是在 `request.query` 里手写的**，不是从 struct 读取的，对每个收该类型的接口都生效。
 - 接口的请求和响应类型必须声明在匹配 `models` 的包里。
 - 文档是 OpenAPI 3.0；kin-openapi 不写 3.1。

@@ -415,6 +415,8 @@ func TestWhatAFieldSaysAboutItselfIsWrittenWithTheField(t *testing.T) {
 			maybe := props["maybe"].Value
 			assert.True(t, maybe.Nullable, "nullable is said next to the reference")
 			assert.Len(t, maybe.AllOf, 1)
+			assert.True(t, maybe.Type.Is("object"), "and next to the type of what it refers to, which is where OpenAPI 3.0 reads it")
+			assert.True(t, props["maybeKind"].Value.Type.Is("integer"))
 
 			others := props["others"].Value
 			assert.Equal(t, "Others own it too.", others.Description)

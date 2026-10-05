@@ -39,13 +39,12 @@ release.
 - A type of another module is written out where it is used, not made a component,
   and when it contains itself it is an `object` the second time; a custom marshaler
   is not read.
-- The marker `pattern: default` shows on a schema that docgen could not fill in.
-- A type of the module that is not in `models` shares its schema with the fields
-  that use it, so that the comment of one of them can become its description.
+- The marker `pattern: default` shows on a schema that docgen could not fill in,
+  with a warning.
 - `json:",string"` is ignored, and a pointer is not nullable unless
   `json:"x,nullable"` says so.
-- A generic type is documented as declared; the fields of a type-parameter type
-  have no schema and only one type parameter is supported.
+- The constants of an enum must be declared in the package of the type.
+- A generic type is documented as declared; only one type parameter is supported.
 - Query parameters are listed by hand in `request.query`.
 - An operation whose request or response type is declared outside the packages
   that `models` matches makes the run fail.

@@ -105,3 +105,38 @@ func TestMissingReferenceToAnUnnamedTypeSaysSo(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+// Cutting what references name, so that a document is validated in a short time,
+// leaves each component validated where it is declared: a schema that is not valid
+// is refused, one that refers to another and one that does not.
+func TestAnInvalidSchemaIsStillRefusedWhenReferencesAreCut(t *testing.T) {
+	for name, build := range map[string]func(*openapi3.Schema){
+		"declared": func(s *openapi3.Schema) {},
+		"in a property": func(s *openapi3.Schema) {
+			s.Properties["inner"] = &openapi3.SchemaRef{Value: &openapi3.Schema{Type: &openapi3.Types{"integer"}, Default: "not a number"}}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			other := openapi3.NewObjectSchema()
+			owner := openapi3.NewObjectSchema()
+			owner.Properties["other"] = &openapi3.SchemaRef{Ref: "#/components/schemas/Other"}
+			if name == "declared" {
+				owner.Type = &openapi3.Types{"integer"}
+				owner.Default = "not a number"
+			}
+			build(owner)
+			doc := &openapi3.T{
+				OpenAPI: "3.0.0",
+				Info:    &openapi3.Info{Title: "T", Version: "1"},
+				Paths:   openapi3.NewPaths(),
+				Components: &openapi3.Components{Schemas: openapi3.Schemas{
+					"Owner": owner.NewRef(),
+					"Other": other.NewRef(),
+				}},
+			}
+			if _, err := GenerateYAML(doc, nil); err == nil || !strings.Contains(err.Error(), "invalid default") {
+				t.Fatalf("a schema with a default its type does not allow was accepted: %v", err)
+			}
+		})
+	}
+}

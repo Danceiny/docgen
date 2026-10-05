@@ -26,8 +26,11 @@ func (p *TypeParser) at(node ast.Node) string {
 // atField says where the field that is being parsed is, or "" when it is not a
 // field that is.
 func (p *TypeParser) atField(ctx *ParseContext) string {
-	if ctx == nil || ctx.Field == nil {
+	if ctx == nil {
 		return ""
+	}
+	if ctx.Field == nil {
+		return ctx.Where
 	}
 	return p.at(ctx.Field)
 }
@@ -51,6 +54,9 @@ type ParseContext struct {
 	Doc     *ast.CommentGroup
 	Comment *ast.CommentGroup
 	Field   *ast.Field
+	// Where is the position of the field the type is the type of, as file:line,
+	// when Field is not kept: the element of a list is not the field.
+	Where string
 
 	GenericValue ast.Expr
 	GenericTypes []string

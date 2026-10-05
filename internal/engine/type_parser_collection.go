@@ -89,6 +89,7 @@ func (p *TypeParser) parseArray(expr *ast.ArrayType, ctx *ParseContext) *openapi
 	if !settings.CompatLegacyOutput {
 		// The comment and the tags of a field are those of the list, not of what
 		// it is a list of.
+		ctx2.Where = p.atField(ctx) // what the elements are of is still where the field is
 		ctx2.Doc, ctx2.Comment, ctx2.Field = nil, nil, nil
 	}
 	if p.referenceHidden(expr.Elt, p.generateTypeKey(expr.Elt), &ParseContext{}) {

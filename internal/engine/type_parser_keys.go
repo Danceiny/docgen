@@ -153,6 +153,8 @@ func (p *TypeParser) keyOfPointee(t types.Type) string {
 	switch t := t.(type) {
 	case *types.Pointer:
 		return p.keyOfPointee(t.Elem())
+	case *types.Basic:
+		return t.Name() // complex64 is complex64, which is left out with a warning, not an object
 	case *types.Alias:
 		if obj := t.Obj(); obj != nil {
 			if pkg := obj.Pkg(); pkg != nil {

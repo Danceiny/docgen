@@ -36,6 +36,8 @@ type Pet struct {
 	Matrix [][]int `json:"matrix"`
 	// Maybe may be missing.
 	Maybe *Birth `json:"maybe,nullable"`
+	// MaybeKind may be missing too.
+	MaybeKind Kind `json:"maybeKind,nullable"`
 	// Tags are words.
 	Tags []string `json:"tags"`
 }

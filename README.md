@@ -113,7 +113,8 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
   that starts with the service name loses that, as a plain prefix: `@path:
   /orderList` of the service `order` is `/api/order/list`, and so is `@path:
   /order/list`; the method name itself is never stripped (`OrderList` is
-  `/api/order/orderList`).
+  `/api/order/orderList`). It is a plain prefix, so `@path: /orders/list` of the
+  service `order` is `/api/order/s/list`.
 - The default HTTP method is `POST`; `@method` changes it, and several methods
   (`@method: GET, POST`) give an operation each, whose ids have the method in
   lower case added (`pet/get_get`, `pet/get_post`). OpenAPI does not allow a body
@@ -188,6 +189,14 @@ The named types of the `models` packages become **components**
   slice of bytes is a base64 `string` and a byte a number.
 - A type that contains itself, directly or through other types, is a `$ref` to
   itself.
+- A generic type is documented as declared. A field of a type-parameter type has
+  no schema unless its comment lists the types it may be, `@generic: Product,
+  Order`, which makes it a `oneOf` of those components; an instantiated
+  `Page[Product]` keeps the alternatives its type arguments name, and
+  `generic_titles` lists the titles whose `oneOf` is kept whole. A struct with only
+  such a field is titled with the first candidate. An interface with methods holds
+  any JSON value, unless its comment says `@autowire: true`, which makes it a
+  `oneOf` of the types of its package that implement it.
 - `time.Time` is a `date-time` string and `time.Duration` an `int64` number of
   nanoseconds, as JSON writes them. `type_map` says otherwise.
 
@@ -225,7 +234,8 @@ with no annotation is shown everywhere.
 A hidden type has no schema, and neither has anything that would refer to it: a
 field of the type, of a list or map of it, or that embeds it, is left out, and so
 is an operation that takes or returns it (with a warning that says which). An
-enum is the exception: it is shown, with its values hidden.
+enum with an `//apidoc:hidden` directive is the exception: it is shown, with its
+values hidden; one that is hidden by its name is left out like any type.
 
 An older form, `apidoc:"Staff"`, shows the field only in the documents that list
 `Staff` in `legacy_field_tokens`. Any other value of the tag hides the field from
@@ -296,7 +306,8 @@ errors:                         # the error catalog @response refers to
   file: errors.json
   component_prefix: example.com.shop.errors.
 
-generic_titles: []              # full keys of generic types whose oneOf is not narrowed
+generic_titles: []              # titles of schemas whose oneOf is kept whole, not narrowed
+                                #   by the type arguments in the title that holds them
 
 docs:
   - name: internal              # selects the document with -doc
@@ -437,7 +448,15 @@ compat:
     declared after its struct is replaced by a copy of the type, while one
     declared before it is a `$ref` that has lost the comment;
   - example and default tags are read by the Go type of the field, and a value the
-    type does not allow stops the run.
+    type does not allow stops the run;
+  - a type declared as another type (`type Money2 Money`) and an interface with
+    methods are the placeholder `{type: object, pattern: default}`;
+  - a type of the module outside `models` has the comment of the first field that
+    uses it as its description and is nullable if that field is, `type_map` does not
+    describe a struct, a field of a struct that an embedded struct has too is the
+    embedded one when it is written after it, an embedded list or map is left out,
+    and an enum hidden by its name or a map of maps of a hidden type is not hidden;
+  - `@generic` without a semicolon leaves the candidates in the description.
 
   And what was wrong in the documents: a public document writes the types that
   fields use in place of references, which makes it grow with the number of paths
@@ -455,17 +474,14 @@ on them.
   operation: wrap it in a type of your module. A custom marshaler is not read, so
   a type that writes itself as something else than its Go shape (`net.IP`,
   `big.Int`, a UUID that is an array of bytes) needs a `type_map` entry.
-- The marker `pattern: default` shows on a schema that docgen could not fill in:
-  the items of a list of a type parameter, a type that is not a type of a package
-  it can read.
-- **Put the package of every type your API uses in `models`.** A type of the module
-  that is not in one is loaded when a field uses it, and shares its schema with
-  the fields that use it, so that the comment or the example of one of them can
-  become its description.
+- The marker `pattern: default` shows on a schema that docgen could not fill in,
+  such as an `@autowire` interface with nothing that implements it; docgen warns
+  about each one.
 - `json:",string"` is ignored, and a pointer is not nullable unless
   `json:"x,nullable"` says so.
-- **Generics are documented as declared**: a field of a type-parameter type has no
-  schema, and a generic type with more than one type parameter is not supported.
+- The constants of an enum must be declared in the package of the type.
+- **Generics are documented as declared**, as said above: only one type parameter
+  is supported, and a type-parameter field without `@generic` has no schema.
 - **Query parameters are listed by hand** in `request.query`, not read from the
   struct, and apply to every operation that takes the type.
 - The request and response types of an operation must be declared in a package

@@ -191,6 +191,9 @@ func trimPrefix(c string, ignores ...string) string {
 			if len(vs) == 2 {
 				return vs[1]
 			}
+			if !settings.CompatLegacyOutput {
+				return "" // the line says which types, and there is nothing after it
+			}
 			return v
 		}
 	}

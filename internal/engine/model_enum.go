@@ -105,7 +105,7 @@ func generateEnumSchemaFromEntry(entries []EnumEntry, underlyingType string, whe
 	// create the schema and fill in the fields
 	ori := getBasicTypeSchema(underlyingType)
 	if ori == nil {
-		Logger().Warn("enum underlying type has no schema, using object", append([]any{"underlyingType", underlyingType}, where...)...)
+		warnAt("enum underlying type has no schema, using object", append([]any{"underlyingType", underlyingType}, where...)...)
 		ori = getBasicTypeSchema("object")
 	}
 	schema := *ori

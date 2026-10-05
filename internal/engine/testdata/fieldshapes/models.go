@@ -125,3 +125,21 @@ type OuterLast struct {
 	Inner
 	Name int `json:"name"`
 }
+
+// Box is generic.
+type Box[T any] struct {
+	// Data is the payload.
+	// @generic: Base,Inner
+	Data T `json:"data"`
+	// Note says something.
+	Note string `json:"note"`
+}
+
+// NamesList is a list type, embedded below.
+type NamesList []string
+
+// EmbedsList embeds a list type, which encoding/json writes as a field named after it.
+type EmbedsList struct {
+	NamesList
+	Other string `json:"other"`
+}

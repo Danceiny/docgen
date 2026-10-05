@@ -93,8 +93,12 @@ type Compat struct {
 	// and, depending on the order the types are declared in, the type is copied into
 	// the field or the comment is lost, a public document writes the types that
 	// fields use in place of references, an example or a default that the type of
-	// the field does not allow stops the run, and an operation whose comment starts
-	// with an annotation has that line as its summary.
+	// the field does not allow stops the run, a type declared as another type and
+	// an interface with methods are a placeholder, types outside models, type_map
+	// on structs, shadowing by embedding, embedded lists and maps, hidden enums,
+	// containers of hidden types and @generic lines are as they were, and an
+	// operation whose comment starts with an annotation has that line as its
+	// summary.
 	LegacyOutput bool `yaml:"legacy_output"`
 }
 

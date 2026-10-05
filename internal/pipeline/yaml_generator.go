@@ -100,10 +100,47 @@ func GenerateYAML(doc *openapi3.T, genericTitles []string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load marshaled OpenAPI document: %w", err)
 	}
+	if !legacyOutput {
+		cutReferences(parsed)
+	}
 	if err := parsed.Validate(context.Background()); err != nil {
 		return nil, fmt.Errorf("validate marshaled OpenAPI document: %w", err)
 	}
 	return yamlData, nil
+}
+
+// cutReferences makes what each reference of a document refers to a schema that
+// has nothing in it, so that validating the document looks at every schema once,
+// where it is declared. The validation of kin-openapi follows a reference into
+// the component, and does it again for every component that reaches that one
+// through others, and while it does it keeps the schemas it is in and looks for
+// itself among them: the work of a document of three thousand types that refer to
+// each other is longer than a minute, and most of a run. That every reference
+// names a component is checked before the document is written, and what is in
+// the example of a field that refers to an enum was checked against the enum when
+// the field was read.
+func cutReferences(doc *openapi3.T) {
+	var cut func(ref *openapi3.SchemaRef)
+	cut = func(ref *openapi3.SchemaRef) {
+		if ref == nil {
+			return
+		}
+		if ref.Ref != "" {
+			ref.Value = &openapi3.Schema{}
+			return
+		}
+		schema := ref.Value
+		if schema == nil {
+			return
+		}
+		for _, child := range schemaChildren(schema) {
+			cut(child.ref)
+		}
+	}
+	_ = documentSchemas(doc, func(_ string, ref *openapi3.SchemaRef) error {
+		cut(ref)
+		return nil
+	})
 }
 
 // slimSchemas cleans up the references of the components, and turns the schema

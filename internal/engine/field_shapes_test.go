@@ -272,3 +272,21 @@ func TestExampleOfATypeThatTheConfigurationMakesAStringIsText(t *testing.T) {
 	assert.Equal(t, "30s", written.Example)
 	assert.Equal(t, "5m", written.Default)
 }
+
+// The line that says which types a field of a type parameter may be is not part of
+// the description of the field.
+func TestTheCandidatesOfAGenericFieldAreNotItsDescription(t *testing.T) {
+	doc := fieldShapes(t, Settings{})
+	data := doc.Components.Schemas[fieldShapesKey+"Box"].Value.Properties["data"]
+	require.NotNil(t, data)
+	assert.Equal(t, "Data is the payload.", data.Value.Description)
+}
+
+func TestAnEmbeddedTypeThatIsNotAStructIsAFieldNamedAfterIt(t *testing.T) {
+	doc := fieldShapes(t, Settings{})
+	assert.Equal(t, []string{"NamesList", "other"}, propertyNames(doc, "EmbedsList"))
+	assert.True(t, doc.Components.Schemas[fieldShapesKey+"EmbedsList"].Value.Properties["NamesList"].Value.Type.Is("array"))
+
+	legacy := fieldShapes(t, Settings{CompatLegacyOutput: true})
+	assert.Equal(t, []string{"other"}, propertyNames(legacy, "EmbedsList"), "documents generated before leave it out")
+}

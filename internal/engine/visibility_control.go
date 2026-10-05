@@ -295,7 +295,7 @@ func collectVisibleEnumEntries(pkg *packages.Package, typeName string, aud Audie
 
 	// the visibility configuration
 	visibility := getEnumVisibility(pkg, typeName)
-	warnAboutValuesThatMatchNoConstant(allEntries, visibility, typeName)
+	warnAboutValuesThatMatchNoConstant(pkg, allEntries, visibility, typeName)
 
 	// filter by the visibility configuration
 	return filterEnumEntries(allEntries, visibility, aud)
@@ -306,7 +306,7 @@ func collectVisibleEnumEntries(pkg *packages.Package, typeName string, aud Audie
 // values it lists are matched against the names of the constants, StatusActive
 // and not "active", so a list of the values on the wire leaves the enum empty
 // without a word.
-func warnAboutValuesThatMatchNoConstant(entries []EnumEntry, visibility *Visibility, typeName string) {
+func warnAboutValuesThatMatchNoConstant(pkg *packages.Package, entries []EnumEntry, visibility *Visibility, typeName string) {
 	for _, pattern := range append(append([]string(nil), visibility.Whitelist...), visibility.Blacklist...) {
 		matched := false
 		for _, e := range entries {
@@ -316,8 +316,9 @@ func warnAboutValuesThatMatchNoConstant(entries []EnumEntry, visibility *Visibil
 			}
 		}
 		if !matched {
-			Logger().Warn("a value that the //apidoc: directive of an enum lists is the name of none of its constants; the values are matched against the names of the constants, such as StatusActive, not against what they are on the wire",
-				"type", typeName, "value", pattern)
+			spec, _ := findTypeDeclaration(pkg, typeName)
+			warnAt("a value that the //apidoc: directive of an enum lists is the name of none of its constants; the values are matched against the names of the constants, such as StatusActive, not against what they are on the wire",
+				"type", typeName, "value", pattern, "at", positionOf(pkg, spec))
 		}
 	}
 }

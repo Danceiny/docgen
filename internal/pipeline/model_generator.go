@@ -28,7 +28,7 @@ func GenerateAPIs(doc *openapi3.T, targetPkgIDs []string, sessions ...*engine.Ge
 				for _, method := range service.Methods {
 					if hidden := sessions[0].HiddenTypeOf(method); hidden != "" {
 						engine.Logger().Warn("operation is left out of the document: it uses a type that the document hides",
-							"service", service.ServiceName, "method", method.Name, "type", hidden, "at", method.Pos)
+							"document", doc.Info.Title, "service", service.ServiceName, "method", method.Name, "type", hidden, "at", method.Pos)
 						continue
 					}
 					engine.BuildPathItem(doc, service, method)

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"encoding/json"
 	"go/ast"
 	"go/types"
 	"reflect"
@@ -11,7 +12,6 @@ import (
 	"unicode"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"gopkg.in/yaml.v3"
 
 	"github.com/Danceiny/docgen/internal/suggest"
 )
@@ -19,7 +19,7 @@ import (
 // parseStruct parses a struct type (the core of it).
 func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi3.SchemaRef {
 	schema := openapi3.NewObjectSchema()
-	fields := structFields(st)
+	fields := structFields(st, p.typesInfo())
 	fieldCnt := len(fields)
 
 	var fieldNames []string // the order of the fields, used for the extension field
@@ -150,6 +150,19 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 					fieldTypeKey := p.generateTypeKey(ft)
 					if !settings.CompatLegacyOutput {
 						p.setExampleAndDefault(field, jsonName, fieldSchema.Value, example, defaultVal, fieldType)
+						if wrapper := fieldSchema.Value; wrapper.Nullable && wrapper.Type == nil && len(wrapper.AllOf) == 1 {
+							// OpenAPI 3.0 lets nullable have an effect next to a type only, and the
+							// type is that of what the reference refers to.
+							if described := p.getRealSchemaFromDoc(strings.TrimPrefix(wrapper.AllOf[0].Ref, "#/components/schemas/")); described != nil && described.Value != nil {
+								wrapper.Type = described.Value.Type
+							}
+						}
+						if wrapper := fieldSchema.Value; len(wrapper.AllOf) == 1 && wrapper.Description == "" && !wrapper.Nullable &&
+							wrapper.Example == nil && wrapper.Default == nil && schema.Properties[jsonName] == fieldSchema {
+							// Nothing is left to say of the field: its example was one its type does
+							// not allow. It is the reference itself, as a field that says nothing is.
+							schema.Properties[jsonName] = wrapper.AllOf[0]
+						}
 						return
 					}
 					if example != "" {
@@ -198,8 +211,8 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 						titles = append(titles, v)
 						fieldSchema.Value.OneOf = append(fieldSchema.Value.OneOf, NewSchemaRefFromFullKey(ref.Value.Title))
 					} else {
-						Logger().Warn("generic candidate of a field has no schema",
-							"candidate", v, "field", jsonName, "fieldType", types.ExprString(ft), "key", ctx.FullKey)
+						warnAt("generic candidate of a field has no schema",
+							"candidate", v, "field", jsonName, "fieldType", types.ExprString(ft), "key", ctx.FullKey, "at", p.at(field))
 					}
 				}
 				titles = dedupe(titles)
@@ -249,7 +262,7 @@ func (p *TypeParser) extractFieldNamesFromStruct(st *ast.StructType, ctx *ParseC
 
 	var fieldNames []string
 
-	for _, field := range structFields(st) {
+	for _, field := range structFields(st, p.typesInfo()) {
 		// embedded fields
 		if len(field.Names) == 0 {
 			// the field names of the embedded field, recursively
@@ -282,7 +295,7 @@ func (p *TypeParser) extractFieldNamesFromStruct(st *ast.StructType, ctx *ParseC
 // flattened one. A configuration that keeps legacy_output gets what
 // documents always had: the first name of a declaration, and the embedded field
 // flattened.
-func structFields(st *ast.StructType) []*ast.Field {
+func structFields(st *ast.StructType, info *types.Info) []*ast.Field {
 	if st == nil || st.Fields == nil {
 		return nil
 	}
@@ -293,7 +306,7 @@ func structFields(st *ast.StructType) []*ast.Field {
 	for _, f := range st.Fields.List {
 		switch {
 		case len(f.Names) == 0:
-			if embeddedJSONName(f) != "" {
+			if embeddedJSONName(f) != "" || embeddedNonStruct(f, info) {
 				named := *f
 				named.Names = []*ast.Ident{{NamePos: f.Pos(), Name: exported(embeddedTypeName(f.Type))}}
 				fields = append(fields, &named)
@@ -324,6 +337,36 @@ func exported(name string) string {
 		return name
 	}
 	return strings.ToUpper(name[:1]) + name[1:]
+}
+
+// typesInfo is the type information of the package the parser reads, or nil.
+func (p *TypeParser) typesInfo() *types.Info {
+	if p.pkg == nil {
+		return nil
+	}
+	return p.pkg.TypesInfo
+}
+
+// embeddedNonStruct reports whether an embedded field is of a named type that is
+// not a struct: a list, a map, a basic type or an interface, which encoding/json
+// writes as a field named after the type, not as the fields of what it embeds.
+func embeddedNonStruct(f *ast.Field, info *types.Info) bool {
+	if info == nil {
+		return false
+	}
+	t := info.TypeOf(f.Type)
+	if t == nil {
+		return false
+	}
+	if pointer, ok := t.(*types.Pointer); ok {
+		t = pointer.Elem()
+	}
+	named, ok := types.Unalias(t).(*types.Named)
+	if !ok || !named.Obj().Exported() {
+		return false
+	}
+	_, isStruct := named.Underlying().(*types.Struct)
+	return !isStruct
 }
 
 // embeddedJSONName returns the name a json tag gives an embedded field, or "".
@@ -455,9 +498,10 @@ func valueOfTag(schema *openapi3.Schema, raw string, goType reflect.Type) any {
 			return v
 		}
 	default:
-		// an array, an object, or anything: JSON, which YAML reads
+		// an array, an object, or anything: JSON. A plain word or a date is the text
+		// it is, not what YAML would take it for.
 		var value any
-		if err := yaml.Unmarshal([]byte(raw), &value); err == nil {
+		if err := json.Unmarshal([]byte(raw), &value); err == nil {
 			return value
 		}
 	}
@@ -506,25 +550,61 @@ func effectiveSchema(schema *openapi3.Schema) *openapi3.Schema {
 	return schema
 }
 
-// validationCopy is the schema with its enum written as the numbers of a JSON
-// document, which is what the validation of a value compares with: the values of
-// an enum of integers are integers of Go until the document is written.
+// validationCopy is the schema, and everything it is made of, with the enums
+// written as the numbers of a JSON document, which is what the validation of a
+// value compares with: the values of an enum of integers are integers of Go until
+// the document is written. The enum of the items of a list is one of them.
 func validationCopy(schema *openapi3.Schema) *openapi3.Schema {
-	if len(schema.Enum) == 0 {
-		return schema
+	return copyForValidation(schema, map[*openapi3.Schema]*openapi3.Schema{})
+}
+
+func copyForValidation(schema *openapi3.Schema, done map[*openapi3.Schema]*openapi3.Schema) *openapi3.Schema {
+	if schema == nil {
+		return nil
+	}
+	if copied, ok := done[schema]; ok {
+		return copied
 	}
 	c := *schema
-	c.Enum = make([]any, len(schema.Enum))
-	for i, v := range schema.Enum {
-		switch n := v.(type) {
-		case int:
-			c.Enum[i] = float64(n)
-		case int64:
-			c.Enum[i] = float64(n)
-		case uint64:
-			c.Enum[i] = float64(n)
-		default:
-			c.Enum[i] = v
+	done[schema] = &c
+	if len(schema.Enum) > 0 {
+		c.Enum = make([]any, len(schema.Enum))
+		for i, v := range schema.Enum {
+			switch n := v.(type) {
+			case int:
+				c.Enum[i] = float64(n)
+			case int64:
+				c.Enum[i] = float64(n)
+			case uint64:
+				c.Enum[i] = float64(n)
+			default:
+				c.Enum[i] = v
+			}
+		}
+	}
+	ref := func(r *openapi3.SchemaRef) *openapi3.SchemaRef {
+		if r == nil {
+			return nil
+		}
+		return &openapi3.SchemaRef{Ref: r.Ref, Value: copyForValidation(r.Value, done)}
+	}
+	c.Items = ref(schema.Items)
+	c.Not = ref(schema.Not)
+	if schema.AdditionalProperties.Schema != nil {
+		c.AdditionalProperties.Schema = ref(schema.AdditionalProperties.Schema)
+	}
+	if len(schema.Properties) > 0 {
+		c.Properties = make(openapi3.Schemas, len(schema.Properties))
+		for name, p := range schema.Properties {
+			c.Properties[name] = ref(p)
+		}
+	}
+	for _, of := range []struct{ from, to *openapi3.SchemaRefs }{{&schema.AllOf, &c.AllOf}, {&schema.OneOf, &c.OneOf}, {&schema.AnyOf, &c.AnyOf}} {
+		if len(*of.from) > 0 {
+			*of.to = make(openapi3.SchemaRefs, len(*of.from))
+			for i, r := range *of.from {
+				(*of.to)[i] = ref(r)
+			}
 		}
 	}
 	return &c
