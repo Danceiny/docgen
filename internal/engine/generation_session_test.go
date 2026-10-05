@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/tools/go/packages"
@@ -83,4 +84,17 @@ func TestSessionsOfOneModuleShareItsPackages(t *testing.T) {
 
 	_, err = LoadModule(t.TempDir())
 	assert.ErrorContains(t, err, "has no go.mod")
+}
+
+// What the checker of the values of the tags knows of the types is made once for
+// the document of a session, whatever package asks for it, and a session of
+// another document does not share it.
+func TestTheCheckerOfADocumentIsOneForAllThePackagesOfASession(t *testing.T) {
+	session := &GenerationSession{}
+	doc := checkerDoc(openapi3.Schemas{})
+	other := checkerDoc(openapi3.Schemas{})
+
+	first := session.checkerOf(doc)
+	assert.Same(t, first, session.checkerOf(doc), "asked again for the same document")
+	assert.NotSame(t, first, session.checkerOf(other), "a checker looks up what a reference names in its own document")
 }

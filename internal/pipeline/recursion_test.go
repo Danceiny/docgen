@@ -69,6 +69,34 @@ func referenceOf(ref *openapi3.SchemaRef) string {
 	return ref.Ref
 }
 
+// A configuration that keeps legacy_output walks the schemas the way documents
+// were always made, and a type that contains itself, directly or through another
+// type, is still a reference to itself there: the walk cuts the cycle where it
+// meets it.
+func TestLegacyOutputKeepsATypeThatContainsItselfAReference(t *testing.T) {
+	for _, name := range []string{"internal", "public"} {
+		t.Run(name, func(t *testing.T) {
+			doc := generateFixtureWith(t, "testdata/recursion", "docgen-legacy.yaml", name)
+
+			node := doc.Components.Schemas["example.com.recursion.tree.Node"]
+			require.NotNil(t, node)
+			props := node.Value.Properties
+			assert.Equal(t, recursionPrefix+"tree.Node", props["children"].Value.Items.Ref, "the items of children")
+			assert.Equal(t, recursionPrefix+"tree.Node", props["parent"].Ref)
+			assert.Equal(t, recursionPrefix+"tree.Node", props["siblings"].Value.Items.Ref)
+
+			folder := doc.Components.Schemas["example.com.recursion.tree.Folder"].Value
+			file := doc.Components.Schemas["example.com.recursion.tree.File"].Value
+			assert.Equal(t, recursionPrefix+"tree.File", folder.Properties["files"].Value.Items.Ref)
+			if name == "internal" {
+				// The public document of such a configuration writes the types that
+				// fields use in place of references, and cuts the cycle where it meets it.
+				assert.Equal(t, recursionPrefix+"tree.Folder", file.Properties["folder"].Ref, "two types that contain each other")
+			}
+		})
+	}
+}
+
 // A type that contains itself, directly or through another type, is described
 // with a $ref to itself. Describing it inline would never end: the document
 // would have to contain a copy of the type inside the copy of the type.

@@ -230,11 +230,10 @@ func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.S
 				// nullability only matters in the context of a field
 				schema.Value.Nullable = isNullableFromField(ctx.Field)
 				// A comment is the description; without one, what the schema has
-				// already stays. A type that type_map gives a description has that
-				// one, whatever its own comment says.
+				// already stays. (What type_map says of a type is the description of
+				// its declaration, which is not read here.)
 				desc := extractDescription(ctx.Doc, ctx.Comment)
-				described := ctx.FullKey != "" && settings.TypeMap[ctx.FullKey] != nil && schema.Value.Description != ""
-				if settings.CompatLegacyOutput || !described && (desc != "" || schema.Value.Description == "") {
+				if settings.CompatLegacyOutput || desc != "" || schema.Value.Description == "" {
 					schema.Value.Description = desc
 				}
 			}
