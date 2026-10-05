@@ -191,3 +191,23 @@ func TestEngineReportsOnlyThroughItsLogger(t *testing.T) {
 		})
 	}
 }
+
+// The same warning about the same place is told once in a run, not once for each
+// document that is built.
+func TestAWarningAboutAPlaceIsToldOncePerRun(t *testing.T) {
+	logs := captureLogs(t)
+	Configure(Settings{})
+	for i := 0; i < 3; i++ {
+		warnAt("something is wrong here", "method", "Get", "at", "s.go:10")
+	}
+	warnAt("something is wrong here", "method", "Get", "at", "s.go:20")
+	warnAt("something else is wrong here", "method", "Get", "at", "s.go:10")
+	if got := len(logs.records); got != 3 {
+		t.Fatalf("%d warnings, want 3: one for each different thing", got)
+	}
+	Configure(Settings{})
+	warnAt("something is wrong here", "method", "Get", "at", "s.go:10")
+	if got := len(logs.records); got != 4 {
+		t.Fatalf("%d warnings: a new run tells again", got)
+	}
+}

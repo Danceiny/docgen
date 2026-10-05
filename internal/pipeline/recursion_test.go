@@ -229,6 +229,11 @@ func TestTheResultOfAnOperationKeepsItsShape(t *testing.T) {
 		anything := responseSchema(t, doc, path)
 		assert.Nil(t, anything.Value.Type, "%s: an interface holds any JSON value", path)
 	}
+
+	// The summary of an operation is the first line of its comment, unless that is
+	// an annotation: then it is the name of the method.
+	assert.Equal(t, "Annotated", doc.Paths.Value("/api/shop/annotated").Post.Summary)
+	assert.Equal(t, "One returns a product.", doc.Paths.Value("/api/shop/one").Post.Summary)
 }
 
 // compat.legacy_operation_types keeps the documents that were generated before

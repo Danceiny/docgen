@@ -101,5 +101,5 @@ const (
 	DupB
 	DupAlias     = DupB
 	DupMax   Dup = DupB
-	dupCount
+	dupCount Dup = 99
 )

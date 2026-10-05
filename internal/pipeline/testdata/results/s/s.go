@@ -39,3 +39,7 @@ func (Service) Anything(ctx context.Context, req *m.Req) (interface{}, error) { 
 
 // Whatever returns any.
 func (Service) Whatever(ctx context.Context, req *m.Req) (any, error) { return nil, nil }
+
+// @tags: public
+// @desc: the comment starts with an annotation, so there is no sentence to summarize with
+func (Service) Annotated(ctx context.Context, req *m.Req) (*m.Product, error) { return nil, nil }
