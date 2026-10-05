@@ -1,0 +1,6 @@
+version: 1
+schemas:
+  example.com.replaced.m.Owner:
+    type: object
+    properties:
+      name: {type: string}

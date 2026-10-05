@@ -170,11 +170,12 @@ func TestAHiddenTypeIsLeftOutWithEverythingThatRefersToIt(t *testing.T) {
 	assert.NotNil(t, public.Paths.Value("/api/shop/get"))
 	assert.Nil(t, public.Paths.Value("/api/shop/risk"), "an operation that returns a hidden type is left out")
 	assert.Nil(t, public.Paths.Value("/api/shop/note"), "an operation that takes a hidden type is left out")
+	assert.Nil(t, public.Paths.Value("/api/shop/level"), "an operation that returns an enum that is hidden by its name is left out too")
 
 	// The internal document hides only what is hidden from everybody.
 	internalOrder := internal.Components.Schemas[hidingPrefix+"Order"]
 	require.NotNil(t, internalOrder)
-	assert.Equal(t, []string{"after", "afterPtrList", "before", "beforeList", "beforeMap", "beforePtrList", "beforeValue", "id", "level", "note", "shown"},
+	assert.Equal(t, []string{"after", "afterPtrList", "before", "beforeList", "beforeMap", "beforeNested", "beforePtrList", "beforeValue", "id", "level", "note", "shown"},
 		propertyNames(internalOrder))
 	assert.NotContains(t, internal.Components.Schemas, hidingPrefix+"Draft")
 	assert.Contains(t, internal.Components.Schemas, hidingPrefix+"StaffNote")
@@ -445,4 +446,50 @@ func TestLegacyOutputKeepTheCommentsAsTheyWere(t *testing.T) {
 	assert.Empty(t, props["home"].Value.AllOf)
 	assert.NotEmpty(t, props["home"].Value.Properties, "a type declared after the struct is copied into a field that has a comment")
 	assert.Equal(t, "#/components/schemas/"+commentsPrefix+"Early", props["before"].Ref, "one declared before is a reference, and the comment is lost")
+}
+
+// A type that an overlay replaces may have had a type that nothing else uses; the
+// public document drops that type with the rest of what nothing refers to, and
+// is written. The fields that refer to the replaced type refer to the new schema.
+func TestAnOverlayThatReplacesATypeLeavesNoDanglingReferences(t *testing.T) {
+	for _, name := range []string{"internal", "public"} {
+		t.Run(name, func(t *testing.T) {
+			doc := generateFixture(t, "testdata/replaced", name)
+			owner := doc.Components.Schemas["example.com.replaced.m.Owner"]
+			require.NotNil(t, owner)
+			assert.Contains(t, owner.Value.Properties, "name", "the schema of the overlay")
+			assert.NotContains(t, owner.Value.Properties, "address")
+			if name == "public" {
+				assert.NotContains(t, doc.Components.Schemas, "example.com.replaced.m.Address", "nothing refers to it any more")
+			}
+		})
+	}
+}
+
+const ondemandPrefix = "example.com.ondemand.other."
+
+// A type of the module in a package that no pattern of models matches is described
+// by its own declaration, as it is in a package that does match: its description
+// is its comment, not that of the first field that uses it, it is not nullable
+// because a field of it is, and its enums are made of what they are made of.
+func TestATypeOutsideModelsIsDescribedByItsDeclaration(t *testing.T) {
+	doc := generateFixture(t, "testdata/ondemand", "internal")
+
+	thing := doc.Components.Schemas[ondemandPrefix+"Thing"]
+	require.NotNil(t, thing)
+	assert.Equal(t, "Thing is a thing in another package.", thing.Value.Description)
+	assert.False(t, thing.Value.Nullable, "a field of it is nullable, the type is not")
+
+	holder := doc.Components.Schemas["example.com.ondemand.m.Holder"].Value.Properties
+	assert.True(t, holder["first"].Value.Nullable, "the field says so, next to the reference")
+	assert.Equal(t, "First is the first use of the thing, and it is nullable.", holder["first"].Value.Description)
+	assert.Equal(t, "Second is the second use.", holder["second"].Value.Description)
+	assert.Equal(t, "#/components/schemas/"+ondemandPrefix+"Thing", holder["plain"].Ref)
+
+	raw := doc.Components.Schemas[ondemandPrefix+"Raw"].Value
+	assert.True(t, raw.Type.Is("integer"))
+	assert.Equal(t, []any{float64(97), float64(98)}, raw.Enum)
+	dur := doc.Components.Schemas[ondemandPrefix+"Dur"].Value
+	assert.True(t, dur.Type.Is("integer"), "a duration is a number in JSON")
+	assert.True(t, strings.HasPrefix(dur.Description, "Dur is an enum of durations."))
 }

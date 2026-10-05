@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"go/types"
 	"strings"
 	"sync"
 
@@ -127,6 +128,17 @@ func (p *TypeParser) parseTypeSpecOccupied(typeSpec *ast.TypeSpec, ctx *ParseCon
 		ctx.Doc = typeSpec.Doc
 	}
 	ctx.FullKey = fullKey
+	if configured := settings.TypeMap[fullKey]; configured != nil && !settings.CompatLegacyOutput {
+		// What the configuration says the type is, is what it is, whatever it is
+		// declared as: a struct too.
+		copied := *configured
+		schema = &openapi3.SchemaRef{Value: &copied}
+		if copied.Description == "" {
+			copied.Description = extractDescription(ctx.Doc, ctx.Comment)
+		}
+		p.handleSchema(typeSpec, fullKey, schema, underlyingType, ctx)
+		return
+	}
 	// Go alias declarations (`type Alias = Target`) must resolve the target
 	// schema without treating the alias component as the target's recursion
 	// key. Preserve the alias component identity while copying the resolved
@@ -140,16 +152,7 @@ func (p *TypeParser) parseTypeSpecOccupied(typeSpec *ast.TypeSpec, ctx *ParseCon
 			underlyingType = ident.Name
 		}
 		p.handleSchema(typeSpec, fullKey, schema, underlyingType, ctx)
-		if !settings.CompatLegacyOutput && schema != nil && schema.Ref != "" && isDefaultSchema(schema.Value) {
-			// The type it stands for is declared further down, and is not described
-			// yet: the alias is described as soon as it is.
-			target := strings.TrimPrefix(schema.Ref, "#/components/schemas/")
-			p.defers.PushBack(func() {
-				if described := p.getRealSchemaFromDoc(target); described != nil && described.Value != nil {
-					p.updateSchemaInDocForce(fullKey, CopyRef(described))
-				}
-			})
-		}
+		p.describeWhenTheTypeIs(typeSpec, fullKey, schema)
 		return
 	}
 	switch t := typeSpec.Type.(type) {
@@ -163,6 +166,7 @@ func (p *TypeParser) parseTypeSpecOccupied(typeSpec *ast.TypeSpec, ctx *ParseCon
 		// type definitions (such as type T string)
 		underlyingType = t.Name
 		schema = p.parse(t, ctx)
+		defer p.describeWhenTheTypeIs(typeSpec, fullKey, schema)
 	case *ast.SelectorExpr:
 		// external types (such as time.Time)
 		underlyingType = fmt.Sprintf("%s.%s", t.X, t.Sel.Name)
@@ -278,4 +282,42 @@ func (p *TypeParser) parse(expr ast.Expr, ctx *ParseContext) (schema *openapi3.S
 	}
 	// copyRef cannot be used here
 	return schema
+}
+
+// describeWhenTheTypeIs gives the component of a type that is declared as another
+// type of the package, type Money2 Money or type Alias = Money, the schema of that
+// type as soon as it is described, when it is declared further down and is not yet.
+// The type it ends in is looked for, not the one on its right, which can itself be
+// declared as another, so that it does not matter in what order a chain is declared.
+func (p *TypeParser) describeWhenTheTypeIs(typeSpec *ast.TypeSpec, fullKey string, schema *openapi3.SchemaRef) {
+	if settings.CompatLegacyOutput || schema == nil || schema.Ref == "" || !isDefaultSchema(schema.Value) {
+		return
+	}
+	target := p.rootTypeKey(typeSpec)
+	p.defers.PushBack(func() {
+		if described := p.getRealSchemaFromDoc(target); described != nil && described.Value != nil {
+			p.updateSchemaInDocForce(fullKey, CopyRef(described))
+		}
+	})
+}
+
+// rootTypeKey is the key of the type that a chain of declarations of the package
+// ends in: Money for type A = B; type B Money.
+func (p *TypeParser) rootTypeKey(spec *ast.TypeSpec) string {
+	for range 32 {
+		ident, ok := spec.Type.(*ast.Ident)
+		if !ok || p.pkg == nil || p.pkg.TypesInfo == nil {
+			break
+		}
+		obj, ok := p.pkg.TypesInfo.Uses[ident].(*types.TypeName)
+		if !ok || obj.Pkg() == nil || obj.Pkg().Path() != p.pkg.PkgPath {
+			break
+		}
+		next, _ := findTypeDeclaration(p.pkg, obj.Name())
+		if next == nil {
+			break
+		}
+		spec = next
+	}
+	return p.generateStructKey(spec.Name.Name)
 }

@@ -102,6 +102,11 @@ func (p *TypeParser) referenceHidden(expr ast.Expr, fk string, ctx *ParseContext
 					return shouldHideByVisibilityOfType(visibility, spec.Name.Name, p.audience)
 				}
 			}
+			if !settings.CompatLegacyOutput {
+				// The name of the type it is made of, not the key of the list or the map
+				// that holds it: a map of maps of pointers to it is as hidden as it is.
+				return shouldHideByDefault(named.Obj().Name(), p.audience)
+			}
 		}
 	}
 	last := fk[strings.LastIndex(fk, ".")+1:]
@@ -138,7 +143,16 @@ func (p *TypeParser) warnAboutDirectiveMistakes(spec *ast.TypeSpec, decl *ast.Ge
 // document and is not an enum: such a type has no schema at all.
 func (p *TypeParser) declarationHidden(spec *ast.TypeSpec) bool {
 	if isEnumType(p.pkg, spec) {
-		return false
+		if settings.CompatLegacyOutput {
+			return false
+		}
+		// A directive shows the type with its values hidden. An enum that is hidden
+		// by its name, with no directive to say otherwise, is hidden like any type:
+		// it has no schema, and nothing that refers to it is in the document.
+		if _, decl := findTypeDeclaration(p.pkg, spec.Name.Name); declaredVisibility(spec, decl) != nil {
+			return false
+		}
+		return shouldHideByDefault(spec.Name.Name, p.audience)
 	}
 	return shouldHideType(p.pkg, spec, p.audience)
 }

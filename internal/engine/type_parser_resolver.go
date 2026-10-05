@@ -62,7 +62,13 @@ func (p *TypeParser) Select(alias, tn string, ctx *ParseContext) *openapi3.Schem
 			defer p.session.LeaveResolving(fk)
 		}
 		externalParser := NewTypeParser(externalPkg, p.doc, p.session)
-		if v := externalParser.findTypeAndParse(fk, tn, ctx); v != nil {
+		var v *openapi3.SchemaRef
+		if !settings.CompatLegacyOutput && strings.HasPrefix(fk, ownKeyPrefix()) {
+			v = externalParser.parseDeclared(fk, tn)
+		} else {
+			v = externalParser.findTypeAndParse(fk, tn, ctx)
+		}
+		if v != nil {
 			p.updateSchemaInDoc(fk, v)
 			for e := externalParser.defers.Front(); e != nil; e = e.Next() {
 				p.defers.PushBack(e.Value)
@@ -163,6 +169,30 @@ func (p *TypeParser) findTypeAndParse(fk, tn string, ctx *ParseContext) *openapi
 	return nil
 }
 
+// parseDeclared describes a type of the module that is declared in a package that
+// no pattern of models matches, when a field of a package that does uses it. It is
+// described as the types of the packages that models matches are, by its own
+// declaration, so that enums, type_map and comments are read the same way; and what
+// the field says of itself is written with the field, not into the schema the type
+// has and every other field shares. It gives a reference to the component.
+func (p *TypeParser) parseDeclared(fk, tn string) *openapi3.SchemaRef {
+	importAlias, targetType := findTypeRecursive(p.pkg, tn)
+	if targetType == nil {
+		return nil
+	}
+	spec, decl := findTypeDeclaration(p.pkg, tn)
+	if spec == nil {
+		return nil
+	}
+	p.warnAboutDirectiveMistakes(spec, decl)
+	p.parseTypeSpec(spec, &ParseContext{importAlias: importAlias, Doc: decl.Doc, Comment: spec.Comment})
+	described := p.getRealSchemaFromDoc(fk)
+	if described == nil || described.Value == nil {
+		return nil
+	}
+	return &openapi3.SchemaRef{Ref: NewRefFromFullKey(fk), Value: described.Value}
+}
+
 func findTypeDeclaration(pkg *packages.Package, typeName string) (*ast.TypeSpec, *ast.GenDecl) {
 	if pkg == nil {
 		return nil, nil
@@ -203,6 +233,13 @@ func (p *TypeParser) parseIdent(ident *ast.Ident, ctx *ParseContext) *openapi3.S
 	if fullKey == "" {
 		// 2. the full type key (including the package path)
 		fullKey = p.generateTypeKey(ident)
+	} else if !settings.CompatLegacyOutput && ctx.GenericValue == nil {
+		// The key of the declaration that is being parsed, in type Money2 Money, is
+		// not the key of the type on its right: Money is the type to describe, and
+		// taking Money2 for it makes the declaration refer to itself.
+		if own := p.generateTypeKey(ident); own != fullKey {
+			fullKey = own
+		}
 	}
 	// The parser uses the synthetic "unknown" package when an unexported
 	// runtime dependency cannot be resolved from an API contract. Never emit a

@@ -153,8 +153,12 @@ func (p *TypeParser) parseInterface(expr *ast.InterfaceType, ctx *ParseContext) 
 		}
 		return &openapi3.SchemaRef{Value: empty}
 	}
-	ref := defaultSchemaRef()
 	autowire := extractTagValueFromDocComments(ctx.Doc, ctx.Comment, "autowire")
+	if !settings.CompatLegacyOutput && len(autowire) == 0 {
+		// Whatever has the methods can be written as any JSON value.
+		return &openapi3.SchemaRef{Value: anySchema()}
+	}
+	ref := defaultSchemaRef()
 	if len(autowire) > 0 && strings.TrimSpace(strings.SplitN(autowire[0], "\n", 2)[0]) == "true" {
 		for _, impl := range findImplementations(p.pkg, expr) {
 			impl := impl

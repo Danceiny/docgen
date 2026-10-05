@@ -266,7 +266,11 @@ func normalizeSchemaRef(doc *openapi3.T, ref *openapi3.SchemaRef, seen map[*open
 			return fmt.Errorf("missing local schema reference %q: no schema was generated for that type; the package that declares it has to match a pattern of \"models\" in the configuration, or the type has to be declared in the module", ref.Ref)
 		}
 	}
-	if ref.Value == nil || seen[ref.Value] {
+	// What a reference names is a component, and is looked at where it is
+	// declared: the schema behind it can be a copy that was taken before an overlay
+	// or the narrowing of a oneOf replaced the component, and still refer to types
+	// that nothing refers to any more and that were pruned.
+	if ref.Ref != "" || ref.Value == nil || seen[ref.Value] {
 		return nil
 	}
 	seen[ref.Value] = true

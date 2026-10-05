@@ -92,12 +92,25 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 
 			// the field names of the embedded field (only for fieldNames, they do not depend on the schema)
 			embeddedFieldNames := p.getEmbeddedFieldNamesFromAST(ft, fieldCtx)
-			fieldNames = append(fieldNames, embeddedFieldNames...)
+			fieldNames = appendNames(fieldNames, embeddedFieldNames...)
 
 			if embeddedRef := p.parse(ft, fieldCtx); embeddedRef != nil {
-				if embeddedRef.Value != nil {
+				if embeddedRef.Value != nil && settings.CompatLegacyOutput {
 					schema.Properties = mergeMaps(schema.Properties, embeddedRef.Value.Properties)
 					requiredFields = append(requiredFields, embeddedRef.Value.Required...)
+				} else if embeddedRef.Value != nil {
+					// A field of the struct itself shadows one of the same name that it
+					// embeds, as encoding/json has it, whichever of them is written first.
+					for name, property := range embeddedRef.Value.Properties {
+						if _, own := schema.Properties[name]; !own {
+							schema.Properties[name] = property
+						}
+					}
+					for _, name := range embeddedRef.Value.Required {
+						if schema.Properties[name] == embeddedRef.Value.Properties[name] {
+							requiredFields = append(requiredFields, name)
+						}
+					}
 				}
 				// Add a persistent MergeTask to ensure deep merging of embedded structs
 				fk := p.generateTypeKey(field.Type)
@@ -197,7 +210,12 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 		}
 
 		schema.Properties[jsonName] = fieldSchema
-		fieldNames = append(fieldNames, jsonName)
+		fieldNames = appendNames(fieldNames, jsonName)
+		if !settings.CompatLegacyOutput {
+			// What the field itself says of being required is what counts, not what a
+			// field of the same name that it shadows said.
+			requiredFields = slices.DeleteFunc(requiredFields, func(name string) bool { return name == jsonName })
+		}
 		if isRequiredField(field) {
 			requiredFields = append(requiredFields, jsonName)
 		}
@@ -236,7 +254,7 @@ func (p *TypeParser) extractFieldNamesFromStruct(st *ast.StructType, ctx *ParseC
 		if len(field.Names) == 0 {
 			// the field names of the embedded field, recursively
 			embeddedFieldNames := p.getEmbeddedFieldNamesFromAST(field.Type, ctx)
-			fieldNames = append(fieldNames, embeddedFieldNames...)
+			fieldNames = appendNames(fieldNames, embeddedFieldNames...)
 			continue
 		}
 
@@ -251,7 +269,7 @@ func (p *TypeParser) extractFieldNamesFromStruct(st *ast.StructType, ctx *ParseC
 			continue
 		}
 
-		fieldNames = append(fieldNames, jsonName)
+		fieldNames = appendNames(fieldNames, jsonName)
 	}
 
 	return fieldNames
@@ -411,6 +429,11 @@ func valueOfTag(schema *openapi3.Schema, raw string, goType reflect.Type) any {
 	for goType != nil && goType.Kind() == reflect.Pointer {
 		goType = goType.Elem()
 	}
+	schema = effectiveSchema(schema)
+	if schema.Type.Is(openapi3.TypeString) {
+		// text is text, a duration that the configuration wrote as one included
+		return raw
+	}
 	if goType == reflect.TypeOf(time.Duration(0)) {
 		// a duration is written as one, 10m, and is its nanoseconds in JSON
 		if d, err := time.ParseDuration(raw); err == nil {
@@ -418,10 +441,7 @@ func valueOfTag(schema *openapi3.Schema, raw string, goType reflect.Type) any {
 		}
 		return raw
 	}
-	schema = effectiveSchema(schema)
 	switch {
-	case schema.Type.Is(openapi3.TypeString):
-		return raw
 	case schema.Type.Is(openapi3.TypeInteger):
 		if v, err := strconv.ParseInt(raw, 10, 64); err == nil {
 			return v
@@ -508,4 +528,19 @@ func validationCopy(schema *openapi3.Schema) *openapi3.Schema {
 		}
 	}
 	return &c
+}
+
+// appendNames adds names to the order of the fields of a struct. A name that is
+// there already, a field that shadows an embedded one, keeps its place, unless the
+// configuration keeps documents as they were, which have it twice.
+func appendNames(names []string, more ...string) []string {
+	if settings.CompatLegacyOutput {
+		return append(names, more...)
+	}
+	for _, name := range more {
+		if !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names
 }

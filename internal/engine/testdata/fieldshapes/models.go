@@ -91,3 +91,37 @@ type Holders struct {
 type Raw2 struct {
 	Body json.RawMessage `json:"body"`
 }
+
+// BeforeMapped has a field of a struct that type_map says is a string, declared
+// after it.
+type BeforeMapped struct {
+	M Mapped `json:"m"`
+}
+
+// Mapped is a struct that the configuration describes as a string.
+type Mapped struct {
+	X int `json:"x"`
+}
+
+// AfterMapped has a field of the struct, declared before it.
+type AfterMapped struct {
+	M Mapped `json:"m"`
+}
+
+// Inner has a field the outer struct has too.
+type Inner struct {
+	Name string `json:"name" validate:"required"`
+	Kept string `json:"kept"`
+}
+
+// OuterFirst writes its own name before it embeds Inner.
+type OuterFirst struct {
+	Name int `json:"name"`
+	Inner
+}
+
+// OuterLast embeds Inner before it writes its own name.
+type OuterLast struct {
+	Inner
+	Name int `json:"name"`
+}

@@ -89,6 +89,10 @@ const (
 	defaultPattern = "default"
 )
 
+// IsPlaceholder reports whether a schema is the one docgen puts where it has not
+// described a type: an object with the pattern "default".
+func IsPlaceholder(v *openapi3.Schema) bool { return isDefaultSchema(v) }
+
 func isDefaultSchema(v *openapi3.Schema) bool {
 	if v == nil {
 		return false

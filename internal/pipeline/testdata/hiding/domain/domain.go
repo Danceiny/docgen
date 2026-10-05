@@ -48,6 +48,8 @@ type Order struct {
 	BeforePtrList []*InternalBefore `json:"beforePtrList"`
 	// BeforeMap is a map of the type.
 	BeforeMap map[string]*InternalBefore `json:"beforeMap"`
+	// BeforeNested is a map of maps of pointers to a hidden type.
+	BeforeNested map[string]map[string]*InternalBefore `json:"beforeNested"`
 
 	// After is a pointer to a type declared below.
 	After *InternalAfter `json:"after,omitempty"`

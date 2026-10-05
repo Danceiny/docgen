@@ -187,3 +187,88 @@ func TestAliasesAndPointersToThemAreDescribedAsWhatTheyStandFor(t *testing.T) {
 		assert.Less(t, rec.Level, slog.LevelWarn, "%s %v", rec.Message, attrsOf(rec))
 	}
 }
+
+// A type that is declared as another type of the package is described as that
+// type, whatever order a chain of them is declared in, and what has methods is any
+// value, not an object with a placeholder.
+func TestTypesDeclaredAsOtherTypesAreDescribed(t *testing.T) {
+	logs := captureLogs(t)
+	withSettings(t, Settings{}, "github.com/Danceiny/docgen")
+	pkg := loadFixture(t, "testdata/chains")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "chains", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+	const prefix = "github.com.Danceiny.docgen.internal.engine.testdata.chains."
+
+	for _, name := range []string{"A1", "A2", "A3", "Money2", "Money3", "Level2", "Names2", "Dict2"} {
+		component := doc.Components.Schemas[prefix+name]
+		require.NotNil(t, component, name)
+		assert.False(t, IsPlaceholder(component.Value), "%s is described, not left as the placeholder of a type that was not parsed yet", name)
+	}
+	for _, name := range []string{"A1", "A2", "A3", "Money2", "Money3"} {
+		assert.Contains(t, doc.Components.Schemas[prefix+name].Value.Properties, "amount", name)
+	}
+	assert.Equal(t, []any{int64(0), int64(1)}, doc.Components.Schemas[prefix+"Level2"].Value.Enum)
+	assert.True(t, doc.Components.Schemas[prefix+"Names2"].Value.Type.Is("array"))
+	assert.True(t, doc.Components.Schemas[prefix+"Dict2"].Value.Type.Is("object"))
+
+	holder := doc.Components.Schemas[prefix+"Holder"].Value.Properties
+	for _, name := range []string{"a", "m", "l", "n", "d"} {
+		// a reference is written as one, whatever the schema behind it is when it is made
+		assert.True(t, holder[name].Ref != "" || !IsPlaceholder(holder[name].Value), name)
+	}
+	for _, name := range []string{"s", "t", "u"} {
+		assert.Nil(t, holder[name].Value.Type, "%s has methods, and any value can have them", name)
+		assert.False(t, IsPlaceholder(holder[name].Value), name)
+	}
+	assert.EqualValues(t, 1, holder["l"].Value.Example, "the example is read by the enum")
+	for _, rec := range logs.records {
+		assert.Less(t, rec.Level, slog.LevelWarn, "%s %v", rec.Message, attrsOf(rec))
+	}
+}
+
+// type_map gives a type its schema whatever the type is declared as, a struct
+// too, and whether it is declared before the types that use it or after them.
+func TestTypeMapDescribesAStructAsConfigured(t *testing.T) {
+	configured := &openapi3.Schema{Type: &openapi3.Types{"string"}, Description: "configured description"}
+	doc := fieldShapes(t, Settings{TypeMap: map[string]*openapi3.Schema{fieldShapesKey + "Mapped": configured}})
+
+	mapped := doc.Components.Schemas[fieldShapesKey+"Mapped"]
+	require.NotNil(t, mapped)
+	assert.True(t, mapped.Value.Type.Is("string"))
+	assert.Equal(t, "configured description", mapped.Value.Description)
+	assert.Empty(t, mapped.Value.Properties)
+	assert.Nil(t, configured.Properties, "the schema of the configuration is not changed by being used")
+	for _, name := range []string{"BeforeMapped", "AfterMapped"} {
+		field := doc.Components.Schemas[fieldShapesKey+name].Value.Properties["m"]
+		require.NotNil(t, field, name)
+		assert.True(t, field.Ref != "" || field.Value.Type.Is("string"), "%s: a reference to it, or what it is", name)
+	}
+}
+
+// A field of a struct shadows a field of the same name of a struct it embeds,
+// whichever is written first, as encoding/json has it.
+func TestAFieldShadowsAnEmbeddedOneInEitherOrder(t *testing.T) {
+	doc := fieldShapes(t, Settings{VendorExtensions: true})
+	for _, name := range []string{"OuterFirst", "OuterLast"} {
+		schema := doc.Components.Schemas[fieldShapesKey+name].Value
+		assert.True(t, schema.Properties["name"].Value.Type.Is("integer"), "%s: the field of the struct, not the embedded one", name)
+		assert.NotContains(t, schema.Required, "name", "%s: the embedded field is shadowed, and it was the required one", name)
+		assert.Equal(t, []string{"name", "kept"}, schema.Extensions["x-apifox-orders"], "%s: each name once", name)
+	}
+}
+
+// A type that the configuration says is a string, a duration written as one, has
+// the example and the default of a field as the text they are.
+func TestExampleOfATypeThatTheConfigurationMakesAStringIsText(t *testing.T) {
+	duration := &openapi3.Schema{Type: &openapi3.Types{"string"}, Format: "duration", Example: "1h30m"}
+	withSettings(t, Settings{TypeMap: map[string]*openapi3.Schema{"time.Duration": duration}}, "github.com/Danceiny/docgen")
+	pkg := loadFixture(t, "testdata/tagvalues")
+	doc := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "tags", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, doc, testInternal)
+	runProcessModelsTasks(t, defers, mergeTasks, doc)
+
+	written := doc.Components.Schemas["github.com.Danceiny.docgen.internal.engine.testdata.tagvalues.Thing"].Value.Properties["written"].Value
+	assert.Equal(t, "30s", written.Example)
+	assert.Equal(t, "5m", written.Default)
+}

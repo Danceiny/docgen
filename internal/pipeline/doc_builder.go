@@ -56,6 +56,9 @@ func buildDoc(d config.Doc, cfg *config.Config, first bool) error {
 			"document", d.Name, "services", d.Services)
 	}
 	applyOverlays(doc, overlays, config.StageAfterAPIs)
+	if !legacyOutput {
+		warnAboutPlaceholders(d, doc)
+	}
 
 	output := filepath.Join(outDir, d.Output)
 	if d.Audience == config.AudiencePublic {

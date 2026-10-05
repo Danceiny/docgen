@@ -23,4 +23,5 @@ type Thing struct {
 	BadCount int            `json:"badCount" example:"abc"`
 	BadWhen  time.Time      `json:"badWhen" example:"2024-01-02"`
 	BadFlag  bool           `json:"badFlag" default:"maybe"`
+	Written  time.Duration  `json:"written" example:"30s" default:"5m"`
 }

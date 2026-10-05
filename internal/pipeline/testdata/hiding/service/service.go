@@ -27,6 +27,13 @@ func (ShopService) Risk(ctx context.Context, req *domain.Order) (*domain.Interna
 	return nil, nil
 }
 
+// Level returns an enum that the public document hides by its name.
+//
+// @tags: public
+func (ShopService) Level(ctx context.Context, req *domain.Order) (*domain.InternalLevel, error) {
+	return nil, nil
+}
+
 // Note takes a type that the public document hides.
 //
 // @tags: public

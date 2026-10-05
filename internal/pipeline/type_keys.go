@@ -1,6 +1,9 @@
 package pipeline
 
 import (
+	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 
@@ -92,5 +95,48 @@ func warnAboutForceKeepsThatNameNoSchema(d config.Doc, doc *openapi3.T) {
 			args = append(args, "didYouMean", guess)
 		}
 		engine.Logger().Warn("force_keep names a schema that the document does not have, so it keeps nothing; a schema is named by the full key of its type", args...)
+	}
+}
+
+// warnAboutPlaceholders says so for each schema of a document that docgen could
+// not describe and left as its placeholder, an object with the pattern "default",
+// which a reader takes for a description: the type is made of something docgen does
+// not read, or is declared where it cannot be found.
+func warnAboutPlaceholders(d config.Doc, doc *openapi3.T) {
+	seen := map[*openapi3.Schema]bool{}
+	var walk func(where string, ref *openapi3.SchemaRef)
+	walk = func(where string, ref *openapi3.SchemaRef) {
+		if ref == nil || ref.Value == nil || seen[ref.Value] {
+			return
+		}
+		if ref.Ref != "" && where != "" {
+			return // a reference is looked at where its component is
+		}
+		seen[ref.Value] = true
+		if engine.IsPlaceholder(ref.Value) {
+			engine.Logger().Warn("docgen could not describe a type, and the document has the placeholder of an object with the pattern \"default\" for it",
+				"document", d.Name, "in", where)
+			return
+		}
+		prefix := where
+		if prefix != "" {
+			prefix += "."
+		}
+		for _, name := range slices.Sorted(maps.Keys(ref.Value.Properties)) {
+			walk(prefix+name, ref.Value.Properties[name])
+		}
+		walk(prefix+"items", ref.Value.Items)
+		for i, sub := range ref.Value.AllOf {
+			walk(fmt.Sprintf("%sallOf[%d]", prefix, i), sub)
+		}
+		for i, sub := range ref.Value.OneOf {
+			walk(fmt.Sprintf("%soneOf[%d]", prefix, i), sub)
+		}
+		if ref.Value.AdditionalProperties.Schema != nil {
+			walk(prefix+"additionalProperties", ref.Value.AdditionalProperties.Schema)
+		}
+	}
+	for _, key := range slices.Sorted(maps.Keys(doc.Components.Schemas)) {
+		walk(key, doc.Components.Schemas[key])
 	}
 }
