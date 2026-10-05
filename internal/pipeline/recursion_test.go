@@ -566,6 +566,36 @@ func TestTypesOfAPackageOutsideModelsAreDescribedThroughEachOther(t *testing.T) 
 	assert.Equal(t, "#/components/schemas/"+ondemandPrefix+"Tag", place.Value.Properties["tags"].Value.Items.Ref)
 }
 
+// A union in a package that no pattern of models matches has its alternatives,
+// which are types of that package that nothing else refers to: they are described
+// where the union is, with the fields they embed, and one that the document hides
+// is left out without a warning.
+func TestTheAlternativesOfAUnionOutsideModelsAreDescribed(t *testing.T) {
+	cfg, err := config.Load("testdata/ondemand/docgen.yaml")
+	require.NoError(t, err)
+	log := &records{}
+	require.NoError(t, Run(Options{Dir: "testdata/ondemand", Config: cfg, OutputDir: t.TempDir(), Logger: slog.New(log)}))
+	for _, rec := range log.list {
+		assert.NotContains(t, rec.Message, "has no schema", "%s", attrOf(rec, "impl"))
+	}
+
+	doc := generateFixture(t, "testdata/ondemand", "internal")
+	shape := doc.Components.Schemas[ondemandPrefix+"Shape"]
+	require.NotNil(t, shape)
+	var alternatives []string
+	for _, alternative := range shape.Value.OneOf {
+		alternatives = append(alternatives, strings.TrimPrefix(alternative.Ref, "#/components/schemas/"+ondemandPrefix))
+	}
+	sort.Strings(alternatives)
+	assert.Equal(t, []string{"Circle", "Square"}, alternatives, "Secret is hidden by its directive")
+
+	square := doc.Components.Schemas[ondemandPrefix+"Square"]
+	require.NotNil(t, square)
+	assert.Equal(t, []string{"name", "side"}, propertyNames(square), "with the field of the struct it embeds")
+	assert.Equal(t, []string{"name"}, square.Value.Required)
+	assert.NotContains(t, doc.Components.Schemas, ondemandPrefix+"Secret")
+}
+
 // A type that docgen could not describe is left as its placeholder, and the run
 // says so: nothing in the document says that an object with the pattern "default"
 // is not a description.

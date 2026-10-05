@@ -180,6 +180,13 @@ func (p *TypeParser) parseInterface(expr *ast.InterfaceType, ctx *ParseContext) 
 			// nothing to be added to.
 			ref = &openapi3.SchemaRef{Value: &openapi3.Schema{}}
 		}
+		if p.onDemand && !settings.CompatLegacyOutput {
+			// Nothing else reads this package: the alternatives of the union are
+			// described here, as what they are made of is.
+			for _, impl := range impls {
+				p.parseDeclared(p.generateStructKey(impl), impl)
+			}
+		}
 		for _, impl := range impls {
 			impl := impl
 			p.defers.PushFront(func() {
@@ -191,6 +198,8 @@ func (p *TypeParser) parseInterface(expr *ast.InterfaceType, ctx *ParseContext) 
 					// inline copy loses the dependency edge, so public pruning can
 					// delete AmendPayload and later re-materialize a default object.
 					ref.Value.OneOf = append(ref.Value.OneOf, NewSchemaRefFromFullKey(p.generateStructKey(impl)))
+				} else if !settings.CompatLegacyOutput && p.session != nil && p.session.Hides(p.generateStructKey(impl)) {
+					Logger().Debug("an alternative of an autowired interface is hidden from the document, and is left out", "impl", impl)
 				} else {
 					Logger().Warn("implementation of an autowired interface has no schema", "impl", impl)
 				}

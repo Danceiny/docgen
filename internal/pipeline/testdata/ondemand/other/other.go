@@ -9,6 +9,8 @@ type Thing struct {
 	Name string `json:"name"`
 	// Place is where it is, and its type is reached through this one only.
 	Place Place `json:"place"`
+	// Shape is one of the shapes of the package.
+	Shape Shape `json:"shape"`
 }
 
 // Raw is a byte-based enum.
@@ -58,3 +60,40 @@ type Geo struct {
 type Tag struct {
 	Name string `json:"name"`
 }
+
+// Shape is a union of the shapes of the package that implement it, and no package
+// of models reaches them but through Thing.
+//
+// @autowire: true
+type Shape interface {
+	shape()
+}
+
+// Circle is a shape.
+type Circle struct {
+	Radius float64 `json:"radius"`
+}
+
+func (Circle) shape() {}
+
+// Square is a shape that has the fields of Base too.
+type Square struct {
+	Base
+	Side float64 `json:"side"`
+}
+
+func (Square) shape() {}
+
+// Base is embedded.
+type Base struct {
+	Name string `json:"name" validate:"required"`
+}
+
+// Secret is a shape that no document shows.
+//
+//apidoc:hidden
+type Secret struct {
+	Key string `json:"key"`
+}
+
+func (Secret) shape() {}
