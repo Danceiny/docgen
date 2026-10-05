@@ -495,3 +495,30 @@ func TestATypeOutsideModelsIsDescribedByItsDeclaration(t *testing.T) {
 	assert.True(t, dur.Type.Is("integer"), "a duration is a number in JSON")
 	assert.True(t, strings.HasPrefix(dur.Description, "Dur is an enum of durations."))
 }
+
+// A type that docgen could not describe is left as its placeholder, and the run
+// says so: nothing in the document says that an object with the pattern "default"
+// is not a description.
+func TestATypeThatCannotBeDescribedIsReported(t *testing.T) {
+	cfg, err := config.Load("testdata/placeholders/docgen.yaml")
+	require.NoError(t, err)
+	log := &records{}
+	require.NoError(t, Run(Options{Dir: "testdata/placeholders", Config: cfg, OutputDir: t.TempDir(), Logger: slog.New(log)}))
+
+	var reported []string
+	for _, rec := range log.list {
+		if rec.Level == slog.LevelWarn && strings.Contains(rec.Message, "could not describe a type") {
+			reported = append(reported, attrOf(rec, "in"))
+		}
+	}
+	assert.NotEmpty(t, reported, "the placeholder of the interface is in the document, and the run said so")
+}
+
+// The order of the fields that a schema lists is the order of the fields it has: a
+// field of an embedded struct whose type the document hides is not one of them.
+func TestFieldOrdersLeaveOutTheFieldsAHiddenTypeTookAway(t *testing.T) {
+	doc := generateFixture(t, "testdata/orders", "public")
+	order := doc.Components.Schemas["example.com.orders.m.Order"].Value
+	assert.Equal(t, []string{"id", "shown"}, propertyNames(&openapi3.SchemaRef{Value: order}))
+	assert.Equal(t, []any{"shown", "id"}, order.Extensions["x-apifox-orders"])
+}

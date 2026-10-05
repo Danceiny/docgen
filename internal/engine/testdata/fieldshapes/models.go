@@ -143,3 +143,9 @@ type EmbedsList struct {
 	NamesList
 	Other string `json:"other"`
 }
+
+// Pointers has a pointer to a type that has no schema.
+type Pointers struct {
+	C *complex64 `json:"c"`
+	D *int       `json:"d"`
+}

@@ -293,3 +293,16 @@ func TestAnEmbeddedTypeThatIsNotAStructIsAFieldNamedAfterIt(t *testing.T) {
 	legacy := fieldShapes(t, Settings{CompatLegacyOutput: true})
 	assert.Equal(t, []string{"other"}, propertyNames(legacy, "EmbedsList"), "documents generated before leave it out")
 }
+
+// A pointer to a type that has no schema is left out with a warning, as the type
+// itself is, and not an object that says nothing.
+func TestAPointerToATypeWithNoSchemaIsLeftOut(t *testing.T) {
+	logs := captureLogs(t)
+	doc := fieldShapes(t, Settings{})
+	assert.Equal(t, []string{"d"}, propertyNames(doc, "Pointers"))
+	warned := false
+	for _, rec := range logs.records {
+		warned = warned || (rec.Level == slog.LevelWarn && attrsOf(rec)["type"] == "complex64")
+	}
+	assert.True(t, warned, "it is said that complex64 has no schema")
+}

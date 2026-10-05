@@ -137,6 +137,13 @@ func warnAboutPlaceholders(d config.Doc, doc *openapi3.T) {
 		}
 	}
 	for _, key := range slices.Sorted(maps.Keys(doc.Components.Schemas)) {
-		walk(key, doc.Components.Schemas[key])
+		component := doc.Components.Schemas[key]
+		if component != nil && component.Ref != "" && component.Ref != engine.NewRefFromFullKey(key) {
+			continue // it is a name for another component, which is looked at itself
+		}
+		if component != nil && component.Value != nil {
+			// A component that is a reference to itself carries its own schema.
+			walk(key, &openapi3.SchemaRef{Value: component.Value})
+		}
 	}
 }
