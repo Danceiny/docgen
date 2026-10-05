@@ -126,13 +126,15 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
   除非它带有 json 名字（``Base `json:"base"` ``），那样它就是该名字的字段。
 - 字段的 `validate` 或 `binding` tag 含有规则 `required`（`validate:"required,email"` 含有），或带 `required:"true"` 时为必填。
   `json:"x,nullable"` 表示可为 null。
-- `example:"..."` 和 `default:"..."` tag（或 `json:"x,default=..."`）给出字段的示例和默认值。
+- `example:"..."` 和 `default:"..."` tag（或 `json:"x,default=..."`）给出字段的示例和默认值，按字段的类型读取：
+  整数是数字，字符串是原文，列表或对象是 JSON，`time.Duration` 写成 `10m`。类型不允许的值会被略去，并有指明字段的警告。
 - **类型**的注释是其组件的描述（枚举的注释在前，随后是值的列表）。**字段**的注释（在字段上方或行尾）是该字段的描述。
   类型是组件的字段，在自己有话要说（描述、`nullable`、`example` 或 `default`）时，通过 `allOf` 的唯一成员引用它，
   因为 OpenAPI 3.0 在 `$ref` 旁边没有这些的位置；没有话要说的字段就是 `$ref` 本身。列表或 map 的注释属于列表或 map，不属于它里面的元素。
 - 为具名类型声明的常量使它成为**枚举**，不论常量怎样声明（`iota`、移位、表达式）：编译器算出的值列在 `enum` 里，
   常量的名字和注释列在描述里。类型至少有一个常量用该类型声明（`A Status = iota`）才是枚举；
   `type Status = string` 只是 `string` 的另一个名字，只有用这个名字声明的常量才让它成为枚举。
+  同一个值的几个常量算一个值，未导出的常量（比如用来计数的哨兵）不会列出。
 - map 是 `object`，其 `additionalProperties` 是值的 schema（任意值的 map 是 `true`），`any` 和 `interface{}` 是空 schema，
   字节切片是 base64 `string`，byte 是数字。
 - 直接或经由其他类型包含自身的类型，表现为指向自身的 `$ref`。

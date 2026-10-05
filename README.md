@@ -115,11 +115,11 @@ func (PetService) Get(ctx context.Context, req *protocol.GetPetReq) (*domain.Pet
   /order/list`; the method name itself is never stripped (`OrderList` is
   `/api/order/orderList`).
 - The default HTTP method is `POST`; `@method` changes it, and several methods
-  (`@method: GET, POST`) give an operation each, whose ids have the method in lower
-  case added (`pet/get_get`, `pet/get_post`). OpenAPI does not allow a body on `GET` and `DELETE`, but docgen
-  documents the request of such an operation as a body all the same, unless the
-  request type is listed in `request.query`, which makes it query parameters (see
-  the configuration).
+  (`@method: GET, POST`) give an operation each, whose ids have the method in
+  lower case added (`pet/get_get`, `pet/get_post`). OpenAPI does not allow a body
+  on `GET` and `DELETE`, but docgen documents the request of such an operation as
+  a body all the same, unless the request type is listed in `request.query`, which
+  makes it query parameters (see the configuration).
 - The tags of an operation are the service name, the ones of `@tags` and the ones
   of `@permission`, without repeats, sorted. The first letter of every word of the
   service name is made upper case and the rest is left as it is (`myService/Sub`
@@ -163,7 +163,10 @@ The named types of the `models` packages become **components**
   `required` (`validate:"required,email"` has it), or it has `required:"true"`.
   `json:"x,nullable"` makes it nullable.
 - `example:"..."` and `default:"..."` tags (or `json:"x,default=..."`) give the
-  example and the default of a field.
+  example and the default of a field, read as what its type is: a number for an
+  integer, the text itself for a string, JSON for a list or an object, `10m` for a
+  `time.Duration`. A value that its type does not allow is left out, with a warning
+  that names the field.
 - The comment of a **type** is the description of its component (for an enum it
   comes first, then the list of the values). The comment of a **field**, above it
   or after it, is its description. A field whose type is a component refers to it
@@ -178,6 +181,8 @@ The named types of the `models` packages become **components**
   type is an enum when at least one of its constants is declared with the type
   (`A Status = iota`), and a name made with `type Status = string` is a name for
   `string`, which only the constants declared with that name make an enum.
+  Constants that are other names for a value are one value, and the unexported
+  ones, such as the sentinel that counts the others, are not listed.
 - A map is an `object` whose `additionalProperties` is the schema of its values
   (`true` for a map of any value), `any` and `interface{}` are the empty schema, a
   slice of bytes is a base64 `string` and a byte a number.
