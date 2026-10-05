@@ -9,6 +9,21 @@ type Code string
 // Level is a number type.
 type Level int
 
+// Mode is an enum of numbers.
+type Mode int
+
+// The modes.
+const (
+	ModeA Mode = iota
+	ModeB
+)
+
+// Owner is a struct.
+type Owner struct {
+	// Name of it.
+	Name string `json:"name"`
+}
+
 // Thing has fields with examples and defaults.
 type Thing struct {
 	Timeout  *time.Duration `json:"timeout" example:"1h" default:"30s"`
@@ -24,4 +39,6 @@ type Thing struct {
 	BadWhen  time.Time      `json:"badWhen" example:"2024-01-02"`
 	BadFlag  bool           `json:"badFlag" default:"maybe"`
 	Written  time.Duration  `json:"written" example:"30s" default:"5m"`
+	Modes    []Mode         `json:"modes" example:"[0,1]"`
+	Dropped  Owner          `json:"dropped" example:"nonsense"`
 }

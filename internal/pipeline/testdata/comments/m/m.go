@@ -38,9 +38,14 @@ type Pet struct {
 	Maybe *Birth `json:"maybe,nullable"`
 	// MaybeKind may be missing too.
 	MaybeKind Kind `json:"maybeKind,nullable"`
+	// MaybeNames is a list type that may be missing.
+	MaybeNames Names `json:"maybeNames,nullable"`
 	// Tags are words.
 	Tags []string `json:"tags"`
 }
+
+// Names is a list type.
+type Names []string
 
 // Birth is when and where.
 type Birth struct {

@@ -153,7 +153,9 @@ func (p *TypeParser) parseStruct(st *ast.StructType, ctx *ParseContext) *openapi
 						if wrapper := fieldSchema.Value; wrapper.Nullable && wrapper.Type == nil && len(wrapper.AllOf) == 1 {
 							// OpenAPI 3.0 lets nullable have an effect next to a type only, and the
 							// type is that of what the reference refers to.
-							if described := p.getRealSchemaFromDoc(strings.TrimPrefix(wrapper.AllOf[0].Ref, "#/components/schemas/")); described != nil && described.Value != nil {
+							// A list needs its items next to the type, and says what it is
+							// through the reference; the others are one word.
+							if described := p.getRealSchemaFromDoc(strings.TrimPrefix(wrapper.AllOf[0].Ref, "#/components/schemas/")); described != nil && described.Value != nil && !described.Value.Type.Is(openapi3.TypeArray) {
 								wrapper.Type = described.Value.Type
 							}
 						}

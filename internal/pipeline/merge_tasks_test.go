@@ -3,11 +3,14 @@ package pipeline
 import (
 	"container/list"
 	"fmt"
+	"log/slog"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/getkin/kin-openapi/openapi3"
 
+	"github.com/Danceiny/docgen/internal/config"
 	"github.com/Danceiny/docgen/internal/engine"
 )
 
@@ -101,5 +104,34 @@ func TestSimplifyingTitlesVisitsEachSchemaOnce(t *testing.T) {
 	within(t, "simplifying titles", func() { simplifyTitles(doc) })
 	if got := doc.Components.Schemas["example.Root"].Value.Title; got != "Level59" {
 		t.Errorf("title = %q", got)
+	}
+}
+
+// A schema that docgen could not describe is said to be one, since nothing in a
+// document says it is not a description.
+func TestAPlaceholderInADocumentIsReported(t *testing.T) {
+	log := &records{}
+	engine.SetLogger(slog.New(log))
+	t.Cleanup(func() { engine.SetLogger(nil) })
+
+	placeholder := func() *openapi3.Schema { return &openapi3.Schema{Type: &openapi3.Types{"object"}, Pattern: "default"} }
+	owner := openapi3.NewObjectSchema()
+	owner.Properties["unknown"] = placeholder().NewRef()
+	owner.Properties["fine"] = openapi3.NewStringSchema().NewRef()
+	doc := &openapi3.T{Components: &openapi3.Components{Schemas: openapi3.Schemas{
+		"example.Owner": owner.NewRef(),
+		"example.Lost":  placeholder().NewRef(),
+		"example.Fine":  openapi3.NewObjectSchema().NewRef(),
+	}}}
+	warnAboutPlaceholders(config.Doc{Name: "internal"}, doc)
+
+	var where []string
+	for _, rec := range log.list {
+		if rec.Level == slog.LevelWarn {
+			where = append(where, attrOf(rec, "in"))
+		}
+	}
+	if want := []string{"example.Lost", "example.Owner.unknown"}; !reflect.DeepEqual(where, want) {
+		t.Errorf("reported %v, want %v", where, want)
 	}
 }

@@ -137,6 +137,9 @@ func TestTagValuesAreReadByTheTypeOfTheField(t *testing.T) {
 	assert.Equal(t, true, props["ok"].Value.Default)
 	assert.Equal(t, 0.5, props["ratio"].Value.Example)
 	assert.Equal(t, []any{"a", "b"}, props["names"].Value.Example)
+	assert.Equal(t, []any{float64(0), float64(1)}, props["modes"].Value.Example, "the items of a list are checked against their enum")
+	assert.NotEmpty(t, props["dropped"].Ref, "a field whose example its type does not allow, and that has nothing else to say, is the reference")
+	assert.Empty(t, props["dropped"].Value.AllOf)
 
 	for _, name := range []string{"badCount", "badFlag"} {
 		assert.Nil(t, props[name].Value.Example, name)
@@ -150,7 +153,7 @@ func TestTagValuesAreReadByTheTypeOfTheField(t *testing.T) {
 			fields[attrs["field"]] = attrs["value"]
 		}
 	}
-	assert.Equal(t, map[string]string{"badCount": "abc", "badWhen": "2024-01-02", "badFlag": "maybe"}, fields)
+	assert.Equal(t, map[string]string{"badCount": "abc", "badWhen": "2024-01-02", "badFlag": "maybe", "dropped": "nonsense"}, fields)
 }
 
 // A name that stands for a type of the module is described as the type, whether
