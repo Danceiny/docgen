@@ -459,6 +459,8 @@ compat:
     describe a struct, a field of a struct that an embedded struct has too is the
     embedded one when it is written after it, an embedded list or map is left out,
     and an enum hidden by its name or a map of maps of a hidden type is not hidden;
+  - the directive of a type declared in a group, `type ( ... )`, does not filter the
+    values of an enum;
   - `@generic` without a semicolon leaves the candidates in the description, and
     a candidate after a comma and a space is lost (`@generic: Product, Order` is
     the candidate `Product`);

@@ -1,6 +1,8 @@
 package engine
 
 import (
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
@@ -131,4 +133,38 @@ func TestTypeMapDescriptionIsTheDescriptionOfTheType(t *testing.T) {
 	plain := doc.Components.Schemas[key]
 	require.NotNil(t, plain)
 	assert.Equal(t, "text of the plain kind", plain.Value.Description, "not the comment of the type, Plain has no constants")
+}
+
+// The directive of a type that is declared in a group, type ( ... ), is above the
+// type, not above the group. It filters the values of an enum, hides a struct, and
+// is warned about when it lists a value that is the name of no constant, as it is
+// for a type that is declared on its own. Documents that keep the old way of
+// writing read the comment of the group only.
+func TestTheDirectiveOfATypeInAGroupIsRead(t *testing.T) {
+	logs := captureLogs(t)
+	withSettings(t, Settings{}, "github.com/Danceiny/docgen")
+	pkg := loadFixture(t, "testdata/groupeddecl")
+	const prefix = "github.com.Danceiny.docgen.internal.engine.testdata.groupeddecl."
+
+	public := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "g", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	defers, mergeTasks := processModelsFor(pkg, public, Audience{Name: AudiencePublic})
+	runProcessModelsTasks(t, defers, mergeTasks, public)
+
+	require.Contains(t, public.Components.Schemas, prefix+"Mode")
+	assert.Equal(t, []any{int64(1)}, public.Components.Schemas[prefix+"Mode"].Value.Enum, "only the value the directive lists")
+	assert.NotContains(t, public.Components.Schemas, prefix+"Secret", "hidden from the public document")
+	assert.Contains(t, public.Components.Schemas, prefix+"Plain")
+	var said []string
+	for _, rec := range logs.records {
+		if rec.Level == slog.LevelWarn && strings.Contains(rec.Message, "is the name of none of its constants") {
+			said = append(said, attrsOf(rec)["value"])
+		}
+	}
+	assert.Equal(t, []string{"ModeNope"}, said, "the value that is no constant's name is said")
+
+	legacy := &openapi3.T{OpenAPI: "3.0.3", Info: &openapi3.Info{Title: "g", Version: "1"}, Components: &openapi3.Components{Schemas: openapi3.Schemas{}}}
+	withSettings(t, Settings{CompatLegacyOutput: true}, "github.com/Danceiny/docgen")
+	defers, mergeTasks = processModelsFor(pkg, legacy, Audience{Name: AudiencePublic})
+	runProcessModelsTasks(t, defers, mergeTasks, legacy)
+	assert.Len(t, legacy.Components.Schemas[prefix+"Mode"].Value.Enum, 2, "the directive of a type in a group was not read: every value is there")
 }

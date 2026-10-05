@@ -330,6 +330,15 @@ func getEnumVisibility(pkg *packages.Package, typeName string) *EnumVisibility {
 			if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
 				for _, spec := range genDecl.Specs {
 					if ts, ok := spec.(*ast.TypeSpec); ok && ts.Name.Name == typeName {
+						if !settings.CompatLegacyOutput {
+							// In a group, type ( ... ), the directive is above the type and not
+							// above the group, as it is for every other reading of it.
+							for _, doc := range typeDocs(ts, genDecl) {
+								if v := parseTypeVisibility(doc); v.Declared {
+									return v
+								}
+							}
+						}
 						return parseTypeVisibility(genDecl.Doc)
 					}
 				}

@@ -361,6 +361,7 @@ compat:
   - `models` 之外的模块类型以第一个用到它的字段的注释为描述，且该字段 nullable 时它也 nullable，`type_map` 不描述 struct，
     内嵌 struct 与外层同名的字段在内嵌写在后面时取内嵌的，内嵌的列表或 map 被略去，
     因名字而隐藏的枚举和隐藏类型的 map 的 map 不会被隐藏；
+  - 声明在分组 `type ( ... )` 里的类型的指令不会过滤枚举的值；
   - 没有分号的 `@generic` 会把候选类型留在描述里，逗号后面带空格的候选类型会丢失（`@generic: Product, Order`
     只有候选类型 `Product`）；
   - `@autowire` 联合类型的分支旁边保留标记 `pattern: default`，描述里有 `@autowire: true` 这一行；当它的声明与分支被加入之间
